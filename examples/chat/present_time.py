@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from adomcore.app.container import AppContainer
 from adomcore.app.lifespan import build_container, shutdown, startup
 from adomcore.app.settings import AppSettings
 from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
@@ -91,10 +92,7 @@ class DemoPlugin(BasePlugin):
         return "Use demo tools when they help with math, echo, or time requests."
 
 
-def activate_demo_plugin(container: object) -> None:
-    from adomcore.app.container import AppContainer
-
-    assert isinstance(container, AppContainer)
+def activate_demo_plugin(container: AppContainer) -> None:
     container.plugin_manager.activate_instance(
         DemoPlugin(
             plugin_id="demo",

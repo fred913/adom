@@ -117,7 +117,17 @@ class AtomicAgentsEngine:
         }
         kwargs.update(self._spec.extra_config)
         if tools:
-            kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
+            kwargs["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("input_schema", {}),
+                    },
+                }
+                for t in tools
+            ]
 
         stream = await self._client.chat.completions.create(
             **kwargs, model=self._spec.model, stream=True

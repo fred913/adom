@@ -1,7 +1,7 @@
 """ActionRouter — route AgentDecision actions to executors."""
 
 from datetime import UTC
-from typing import Any
+from typing import Any, cast
 
 from pydantic.dataclasses import dataclass
 
@@ -71,10 +71,13 @@ class ActionRouter:
             return await self._tools.execute(action.function_name, action.arguments)
         if isinstance(action, CallMcpToolAction):
             session = self._mcp.get_session(action.server_id)
-            from adomcore.integrations.mcp.stdio_client import StdioMcpClient
+            from adomcore.integrations.mcp.stdio_client import McpClientProtocol
 
-            assert isinstance(session, StdioMcpClient)
-            return await session.call_tool(action.tool_name, action.arguments)
+            if session is None:
+                raise ValueError(f"MCP server not connected: {action.server_id}")
+            return await cast(McpClientProtocol, session).call_tool(
+                action.tool_name, action.arguments
+            )
         if isinstance(action, AddSkillAction):
             await self._mutation.add_skill(action.skill_id, action.name, action.content)
             return "skill added"

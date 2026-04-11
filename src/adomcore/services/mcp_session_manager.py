@@ -4,6 +4,9 @@ from loguru import logger
 
 from adomcore.domain.ids import McpServerId
 from adomcore.domain.mcp import McpServerSpec, McpToolSpec
+from adomcore.integrations.mcp.stdio_client import (
+    StdioMcpClient,
+)
 from adomcore.storage.stores.mcp_store import McpStore
 
 
@@ -17,12 +20,10 @@ class McpSessionManager:
     def __init__(self, store: McpStore) -> None:
         self._store = store
         # session objects keyed by server id — populated by integrations layer
-        self._sessions: dict[McpServerId, object] = {}
+        self._sessions: dict[McpServerId, StdioMcpClient] = {}
         self._tools: dict[McpServerId, list[McpToolSpec]] = {}
 
     async def connect(self, spec: McpServerSpec) -> None:
-        from adomcore.integrations.mcp.stdio_client import StdioMcpClient
-
         client = StdioMcpClient(spec)
         await client.start()
         self._sessions[spec.id] = client
@@ -34,10 +35,7 @@ class McpSessionManager:
     async def disconnect(self, sid: McpServerId) -> None:
         session = self._sessions.pop(sid, None)
         if session is not None:
-            from adomcore.integrations.mcp.stdio_client import StdioMcpClient
-
-            if isinstance(session, StdioMcpClient):
-                await session.stop()
+            await session.stop()
         self._tools.pop(sid, None)
         logger.info("MCP server disconnected: {}", sid)
 
@@ -54,5 +52,5 @@ class McpSessionManager:
             result.extend(tools)
         return result
 
-    def get_session(self, sid: McpServerId) -> object | None:
+    def get_session(self, sid: McpServerId) -> StdioMcpClient | None:
         return self._sessions.get(sid)
