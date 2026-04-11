@@ -2,9 +2,8 @@
 
 import asyncio
 
-from adomcore.domain.capabilities import FunctionSpec
-from adomcore.domain.ids import PluginId
-from adomcore.plugins.context import PluginContext
+from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
+from adomcore.plugins.base import BasePlugin
 from adomcore.services.capability_registry import CapabilityRegistry
 from adomcore.services.tool_executor import ToolExecutor
 
@@ -16,25 +15,34 @@ async def fetch_url(url: str) -> dict[str, object]:
         return {"status": r.status, "body": r.read(512).decode(errors="replace")}
 
 
-def setup(ctx: PluginContext) -> None:
-    ctx.register_function(
-        FunctionSpec(
-            name="fetch_url",
-            description="Fetch the first 512 bytes of a URL.",
-            input_schema={
-                "type": "object",
-                "properties": {"url": {"type": "string"}},
-                "required": ["url"],
-            },
-            source_plugin=PluginId("http_fetch"),
-        ),
-        fetch_url,
-    )
+class HttpFetchPlugin(BasePlugin):
+    def functions(self) -> list[FunctionBinding]:
+        return [
+            FunctionBinding(
+                spec=FunctionSpec(
+                    name="fetch_url",
+                    description="Fetch the first 512 bytes of a URL.",
+                    input_schema={
+                        "type": "object",
+                        "properties": {"url": {"type": "string"}},
+                        "required": ["url"],
+                    },
+                    source_plugin=self.id,
+                ),
+                handler=fetch_url,
+            )
+        ]
 
 
 async def main() -> None:
     registry = CapabilityRegistry()
-    setup(PluginContext(registry))
+    plugin = HttpFetchPlugin(
+        plugin_id="http_fetch",
+        name="HTTP Fetch",
+        description="Fetch the first bytes from a URL.",
+    )
+    for binding in plugin.functions():
+        registry.register(binding.spec, binding.handler)
     executor = ToolExecutor(registry)
     result = await executor.execute("fetch_url", {"url": "https://example.com"})
     print(result)

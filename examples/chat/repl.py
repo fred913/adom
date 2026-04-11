@@ -11,9 +11,11 @@ from pydantic import BaseModel
 from adomcore.app.container import AppContainer
 from adomcore.app.lifespan import build_container, shutdown, startup
 from adomcore.app.settings import AppSettings
-from adomcore.domain.capabilities import FunctionSpec
+from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
+from adomcore.domain.ids import SkillId
+from adomcore.domain.skills import SkillSpec
 from adomcore.domain.streaming import TurnStreamEventType
-from adomcore.plugins.context import PluginContext
+from adomcore.plugins.base import BasePlugin
 
 
 class AddArgs(BaseModel):
@@ -44,37 +46,59 @@ def format_time(timezone_label: str = "UTC") -> dict[str, str]:
     }
 
 
-class DemoPlugin:
-    async def setup(self, ctx: PluginContext) -> None:
-        await ctx.register_skill(
-            skill_id="demo_tool_preference",
-            name="Demo tool preference",
-            content="Use the available demo tools for math, echo, and time questions.",
-        )
-        ctx.register_function(
-            FunctionSpec(
-                name="add_numbers",
-                description="Add two integers.",
-                input_schema=AddArgs.model_json_schema(),
+class DemoPlugin(BasePlugin):
+    def functions(self) -> list[FunctionBinding]:
+        return [
+            FunctionBinding(
+                spec=FunctionSpec(
+                    name="add_numbers",
+                    description="Add two integers.",
+                    input_schema=AddArgs.model_json_schema(),
+                    source_plugin=self.id,
+                ),
+                handler=add_numbers,
             ),
-            add_numbers,
-        )
-        ctx.register_function(
-            FunctionSpec(
-                name="echo_text",
-                description="Echo text back to the caller.",
-                input_schema=EchoArgs.model_json_schema(),
+            FunctionBinding(
+                spec=FunctionSpec(
+                    name="echo_text",
+                    description="Echo text back to the caller.",
+                    input_schema=EchoArgs.model_json_schema(),
+                    source_plugin=self.id,
+                ),
+                handler=echo_text,
             ),
-            echo_text,
-        )
-        ctx.register_function(
-            FunctionSpec(
-                name="format_time",
-                description="Return the current UTC time.",
-                input_schema=FormatTimeArgs.model_json_schema(),
+            FunctionBinding(
+                spec=FunctionSpec(
+                    name="format_time",
+                    description="Return the current UTC time.",
+                    input_schema=FormatTimeArgs.model_json_schema(),
+                    source_plugin=self.id,
+                ),
+                handler=format_time,
             ),
-            format_time,
+        ]
+
+    def skills(self) -> list[SkillSpec]:
+        return [
+            SkillSpec(
+                id=SkillId("demo_tool_preference"),
+                name="Demo tool preference",
+                content="Use the available demo tools for math, echo, and time questions.",
+            )
+        ]
+
+    def system_prompt(self) -> str:
+        return "Use demo tools when they help with math, echo, or time requests."
+
+
+def activate_demo_plugin(container: AppContainer) -> None:
+    container.plugin_manager.activate_instance(
+        DemoPlugin(
+            plugin_id="demo",
+            name="Demo Plugin",
+            description="In-memory demo plugin for the chat REPL.",
         )
+    )
 
 
 def _load_demo_settings(temp_root: Path) -> AppSettings:
@@ -138,12 +162,7 @@ async def main() -> None:
         data_dir = Path(tmp)
         settings = _load_demo_settings(data_dir)
         container = await build_container(settings)
-
-        plugin_ctx = PluginContext(
-            container.capability_registry,
-            container.self_mutation_service,
-        )
-        await DemoPlugin().setup(plugin_ctx)
+        activate_demo_plugin(container)
 
         await startup(container)
         try:

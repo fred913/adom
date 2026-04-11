@@ -10,9 +10,8 @@ from typing import Any, cast
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from adomcore.domain.capabilities import FunctionSpec
-from adomcore.domain.ids import PluginId
-from adomcore.plugins.context import PluginContext
+from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
+from adomcore.plugins.base import BasePlugin
 
 
 def _safe_name(method: str, path: str) -> str:
@@ -51,31 +50,41 @@ class OpenApiOperation:
     input_schema: dict[str, Any]
 
 
-class OpenApiPlugin:
+class OpenApiPlugin(BasePlugin):
     def __init__(
         self,
         *,
         plugin_id: str,
+        name: str | None = None,
+        version: str = "0.1.0",
+        description: str = "",
         spec: dict[str, Any],
         base_url: str,
         auth_headers: dict[str, str] | None = None,
     ) -> None:
-        self._plugin_id = PluginId(plugin_id)
+        super().__init__(
+            plugin_id=plugin_id,
+            name=name or plugin_id,
+            version=version,
+            description=description,
+        )
         self._spec = spec
         self._base_url = base_url.rstrip("/")
         self._auth_headers = auth_headers or {}
 
-    def setup(self, ctx: PluginContext) -> None:
-        for operation in self._iter_operations():
-            ctx.register_function(
-                FunctionSpec(
+    def functions(self) -> list[FunctionBinding]:
+        return [
+            FunctionBinding(
+                spec=FunctionSpec(
                     name=operation.operation_id,
                     description=operation.description,
                     input_schema=operation.input_schema,
-                    source_plugin=self._plugin_id,
+                    source_plugin=self.id,
                 ),
-                self._make_handler(operation),
+                handler=self._make_handler(operation),
             )
+            for operation in self._iter_operations()
+        ]
 
     def _iter_operations(self) -> list[OpenApiOperation]:
         operations: list[OpenApiOperation] = []

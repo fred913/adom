@@ -30,6 +30,7 @@ class ModelSpec:
     enabled: bool = True
     api_base: str | None = None
     api_key: str | None = None
+    extra_config: dict[str, Any] = field(default_factory=lambda: {})
     token_estimate_provider: TokenEstimateProviderKind = (
         TokenEstimateProviderKind.HEURISTIC
     )

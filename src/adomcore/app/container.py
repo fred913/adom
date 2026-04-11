@@ -15,7 +15,6 @@ from adomcore.domain.models import ModelProviderKind, ModelSpec
 from adomcore.domain.policies import TokenBudgetPolicy
 from adomcore.domain.streaming import EngineDecisionEvent, EngineEvent
 from adomcore.integrations.llm.engine_protocol import AgentEngine
-from adomcore.plugins.context import PluginContext
 from adomcore.runtime.action_router import ActionRouter
 from adomcore.runtime.agent_runtime import AgentRuntime
 from adomcore.runtime.compact_manager import CompactManager
@@ -193,6 +192,7 @@ def _default_context_builder() -> ContextBuilder:
         _default_compact_store(),
         _default_skill_service(),
         _default_capability_registry(),
+        _default_plugin_manager(),
         _default_model_service(),
     )
 
@@ -237,12 +237,10 @@ def _default_cron_dispatch_service() -> CronDispatchService:
 
 def _default_plugin_manager() -> PluginManager:
     registry = _default_capability_registry()
-    self_mutation_service = _default_self_mutation_service()
     return PluginManager(
         _default_plugin_store(),
         _default_plugin_loader(),
         registry,
-        PluginContext(registry, self_mutation_service),
     )
 
 

@@ -131,6 +131,8 @@ There is also a reusable OpenAPI plugin helper in `src/adomcore/plugins/openapi.
 plus an example module in `examples/plugins/openapi_petstore.py`. The intended
 pattern is to instantiate `OpenApiPlugin(...)` from your own plugin module and
 point it at the OpenAPI spec/base URL you want to expose as agent-callable tools.
+Plugin instances now carry their own runtime metadata (`id`, `name`, `description`,
+etc.), so the loaded plugin object itself is the single source of truth.
 
 ---
 

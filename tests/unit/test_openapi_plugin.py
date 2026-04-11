@@ -1,10 +1,7 @@
-from adomcore.plugins.context import PluginContext
 from adomcore.plugins.openapi import OpenApiPlugin
-from adomcore.services.capability_registry import CapabilityRegistry
 
 
 def test_openapi_plugin_registers_operation_as_function() -> None:
-    registry = CapabilityRegistry()
     plugin = OpenApiPlugin(
         plugin_id="sample_openapi",
         base_url="https://example.com",
@@ -35,10 +32,11 @@ def test_openapi_plugin_registers_operation_as_function() -> None:
         },
     )
 
-    plugin.setup(PluginContext(registry))
-
-    spec = registry.get_spec("getUser")
-    assert spec is not None
+    functions = plugin.functions()
+    assert len(functions) == 1
+    spec = functions[0].spec
+    assert plugin.id == "sample_openapi"
     assert spec.description == "Get a user"
     assert spec.input_schema["properties"]["userId"]["type"] == "string"
     assert "userId" in spec.input_schema["required"]
+    assert spec.source_plugin == "sample_openapi"

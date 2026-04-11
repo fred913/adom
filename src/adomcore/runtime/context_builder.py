@@ -27,12 +27,14 @@ class ContextBuilder:
         compact_store: object,
         skill_service: object,
         capability_registry: object,
+        plugin_manager: object,
         model_service: object,
     ) -> None:
         self._threads = thread_store
         self._compact = compact_store
         self._skills = skill_service
         self._caps = capability_registry
+        self._plugins = plugin_manager
         self._models = model_service
 
     def build(
@@ -44,6 +46,7 @@ class ContextBuilder:
         from adomcore.domain.ids import ThreadId
         from adomcore.services.capability_registry import CapabilityRegistry
         from adomcore.services.model_service import ModelService
+        from adomcore.services.plugin_manager import PluginManager
         from adomcore.services.skill_service import SkillService
         from adomcore.storage.stores.compact_store import CompactStore
         from adomcore.storage.stores.thread_store import ThreadStore
@@ -52,6 +55,7 @@ class ContextBuilder:
         assert isinstance(self._compact, CompactStore)
         assert isinstance(self._skills, SkillService)
         assert isinstance(self._caps, CapabilityRegistry)
+        assert isinstance(self._plugins, PluginManager)
         assert isinstance(self._models, ModelService)
         assert isinstance(thread_id, str)
 
@@ -59,9 +63,13 @@ class ContextBuilder:
         model_spec = self._models.get_active(active_model_id)
         compact: CompactSnapshot | None = self._compact.load(tid)
         events = self._threads.read_events(tid, tail=recent_window)
-        skills: list[SkillSpec] = self._skills.list_enabled()
+        skills: list[SkillSpec] = [
+            *self._skills.list_enabled(),
+            *self._plugins.list_enabled_skills(),
+        ]
 
         system_parts = ["You are a helpful AI agent."]
+        system_parts.extend(self._plugins.system_prompt_parts())
         if compact:
             system_parts.append(f"\n## Long-term memory\n{compact.summary}")
             if compact.facts:

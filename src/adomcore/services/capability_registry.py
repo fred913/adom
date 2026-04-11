@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from adomcore.domain.capabilities import FunctionSpec
+from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
 from adomcore.domain.ids import PluginId
 
 
@@ -17,6 +17,7 @@ class CapabilityRegistry:
     def __init__(self) -> None:
         self._specs: dict[str, FunctionSpec] = {}
         self._handlers: dict[str, Callable[..., Any]] = {}
+        self._providers: dict[str, Callable[[], list[FunctionBinding]]] = {}
 
     def register(
         self,
@@ -30,6 +31,16 @@ class CapabilityRegistry:
         self._specs.pop(name, None)
         self._handlers.pop(name, None)
 
+    def register_provider(
+        self,
+        provider_name: str,
+        provider: Callable[[], list[FunctionBinding]],
+    ) -> None:
+        self._providers[provider_name] = provider
+
+    def unregister_provider(self, provider_name: str) -> None:
+        self._providers.pop(provider_name, None)
+
     def unregister_by_plugin(self, plugin_id: PluginId) -> None:
         to_remove = [
             name
@@ -40,13 +51,28 @@ class CapabilityRegistry:
             self.unregister(name)
 
     def get_spec(self, name: str) -> FunctionSpec | None:
-        return self._specs.get(name)
+        specs, _ = self._snapshot()
+        return specs.get(name)
 
     def get_handler(self, name: str) -> Callable[..., Any] | None:
-        return self._handlers.get(name)
+        _, handlers = self._snapshot()
+        return handlers.get(name)
 
     def list_enabled(self) -> list[FunctionSpec]:
-        return [s for s in self._specs.values() if s.enabled]
+        specs, _ = self._snapshot()
+        return [s for s in specs.values() if s.enabled]
 
     def list_all(self) -> list[FunctionSpec]:
-        return list(self._specs.values())
+        specs, _ = self._snapshot()
+        return list(specs.values())
+
+    def _snapshot(
+        self,
+    ) -> tuple[dict[str, FunctionSpec], dict[str, Callable[..., Any]]]:
+        specs = dict(self._specs)
+        handlers = dict(self._handlers)
+        for provider in self._providers.values():
+            for binding in provider():
+                specs[binding.spec.name] = binding.spec
+                handlers[binding.spec.name] = binding.handler
+        return specs, handlers

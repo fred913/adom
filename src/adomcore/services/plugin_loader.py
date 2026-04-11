@@ -8,7 +8,7 @@ from typing import cast
 from loguru import logger
 
 from adomcore.domain.ids import PluginId
-from adomcore.domain.plugins import PluginDescriptor
+from adomcore.domain.plugins import PluginDescriptor, bind_plugin_metadata
 from adomcore.plugins.base import Plugin
 
 
@@ -26,18 +26,44 @@ class PluginLoader:
                 module = importlib.import_module(module_path)
             else:
                 raise
-        plugin: Plugin = getattr(module, attr)
-        if callable(plugin) and not isinstance(plugin, type):
-            return plugin
-        if isinstance(plugin, type):
-            return cast(Plugin, plugin())
+        raw_plugin = getattr(module, attr)
+        plugin = self._coerce_plugin(raw_plugin)
+        bind_plugin_metadata(plugin, descriptor)
         return plugin
 
-    def load_builtin(self, plugin_id: PluginId) -> Plugin:
-        module_path = f"adomcore.plugins.builtin.{plugin_id}.plugin"
+    def load_builtin(self, descriptor_or_id: PluginDescriptor | PluginId) -> Plugin:
+        descriptor = self._builtin_descriptor(descriptor_or_id)
+        module_path = f"adomcore.plugins.builtin.{descriptor.id}.plugin"
         module = importlib.import_module(module_path)
-        cls = getattr(module, "plugin")
-        return cast(Plugin, cls() if isinstance(cls, type) else cls)
+        raw_plugin = getattr(module, "plugin")
+        plugin = self._coerce_plugin(raw_plugin)
+        bind_plugin_metadata(plugin, descriptor)
+        return plugin
+
+    @staticmethod
+    def _builtin_descriptor(
+        descriptor_or_id: PluginDescriptor | PluginId,
+    ) -> PluginDescriptor:
+        if isinstance(descriptor_or_id, PluginDescriptor):
+            return descriptor_or_id
+        plugin_id = descriptor_or_id
+        return PluginDescriptor(
+            id=plugin_id,
+            name=str(plugin_id),
+            version="builtin",
+            description="",
+            entry_point=f"adomcore.plugins.builtin.{plugin_id}.plugin:plugin",
+            builtin=True,
+            enabled=True,
+        )
+
+    @staticmethod
+    def _coerce_plugin(raw_plugin: object) -> Plugin:
+        if callable(raw_plugin) and not isinstance(raw_plugin, type):
+            return cast(Plugin, raw_plugin())
+        if isinstance(raw_plugin, type):
+            return cast(Plugin, raw_plugin())
+        return cast(Plugin, raw_plugin)
 
     @staticmethod
     def _add_to_path(directory: Path) -> None:

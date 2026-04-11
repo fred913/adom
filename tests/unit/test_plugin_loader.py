@@ -13,8 +13,14 @@ class SamplePlugin:
     def __init__(self) -> None:
         self.created = True
 
-    def setup(self, ctx) -> None:
-        return None
+    def functions(self):
+        return []
+
+    def skills(self):
+        return []
+
+    def system_prompt(self):
+        return ''
 
 
 plugin = SamplePlugin
@@ -35,9 +41,14 @@ plugin = SamplePlugin
 
     assert plugin.__class__.__name__ == "SamplePlugin"
     assert getattr(plugin, "created") is True
+    assert plugin.id == PluginId("sample")
+    assert plugin.name == "Sample"
+    assert plugin.entry_point == "sample_plugin:plugin"
 
 
 def test_load_builtin_instantiates_builtin_plugin() -> None:
     plugin = PluginLoader().load_builtin(PluginId("core_admin"))
 
     assert plugin.__class__.__name__ == "BuiltinCoreAdminPlugin"
+    assert plugin.id == PluginId("core_admin")
+    assert plugin.builtin is True

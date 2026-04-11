@@ -12,11 +12,11 @@ async def list_plugins(request: Request) -> list[PluginResponse]:
     c = request.app.state.container
     return [
         PluginResponse(
-            id=str(d.id),
-            name=d.name,
-            version=d.version,
-            enabled=d.enabled,
-            builtin=d.builtin,
+            id=str(plugin.id),
+            name=plugin.name,
+            version=plugin.version,
+            enabled=plugin.enabled,
+            builtin=plugin.builtin,
         )
-        for d in c.plugin_manager.list_all()
+        for plugin in c.plugin_manager.list_all()
     ]

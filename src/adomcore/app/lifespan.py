@@ -1,7 +1,5 @@
 """AppLifespan — startup and shutdown orchestration."""
 
-import inspect
-
 from loguru import logger
 
 from adomcore.app.container import AppContainer
@@ -83,6 +81,7 @@ async def build_container(settings: AppSettings) -> AppContainer:
             enabled=m.get("enabled", True),
             api_base=m.get("api_base"),
             api_key=m.get("api_key"),
+            extra_config=m.get("extra_config") or {},
             token_estimate_provider=TokenEstimateProviderKind(
                 m.get("token_estimate_provider", "heuristic")
             ),
@@ -115,11 +114,16 @@ async def build_container(settings: AppSettings) -> AppContainer:
         c.agent_service, c.skill_service, c.mcp_service
     )
     c.scheduler_service = SchedulerService(c.cron_store)
+    c.plugin_loader = PluginLoader()
+    c.plugin_manager = PluginManager(
+        c.plugin_store, c.plugin_loader, c.capability_registry
+    )
     c.context_builder = ContextBuilder(
         c.thread_store,
         c.compact_store,
         c.skill_service,
         c.capability_registry,
+        c.plugin_manager,
         c.model_service,
     )
     c.action_router = ActionRouter(
@@ -161,15 +165,6 @@ async def build_container(settings: AppSettings) -> AppContainer:
     backend = APSchedulerBackend()
     c.scheduler_service.set_backend(backend)
 
-    # plugin context + manager
-    from adomcore.plugins.context import PluginContext
-
-    plugin_ctx = PluginContext(c.capability_registry, c.self_mutation_service)
-    c.plugin_loader = PluginLoader()
-    c.plugin_manager = PluginManager(
-        c.plugin_store, c.plugin_loader, c.capability_registry, plugin_ctx
-    )
-
     return c
 
 
@@ -202,7 +197,6 @@ async def startup(c: AppContainer) -> None:
 
     # load plugins (builtin first)
     from adomcore.domain.ids import PluginId
-    from adomcore.plugins.context import PluginContext
     from adomcore.services.capability_registry import CapabilityRegistry
     from adomcore.services.plugin_manager import PluginManager
 
@@ -210,7 +204,6 @@ async def startup(c: AppContainer) -> None:
     assert isinstance(c.capability_registry, CapabilityRegistry)
     assert isinstance(c.settings, AppSettings)
 
-    plugin_ctx = PluginContext(c.capability_registry, c.self_mutation_service)
     builtin_cfg = c.settings.plugins.builtin
     for pid_str, enabled in [
         ("cron", builtin_cfg.cron),
@@ -218,14 +211,9 @@ async def startup(c: AppContainer) -> None:
         ("memory_admin", builtin_cfg.memory_admin),
     ]:
         if enabled:
-            from adomcore.services.plugin_loader import PluginLoader
+            await c.plugin_manager.activate_builtin(PluginId(pid_str))
 
-            assert isinstance(c.plugin_loader, PluginLoader)
-            instance = c.plugin_loader.load_builtin(PluginId(pid_str))
-            result = instance.setup(plugin_ctx)
-            if inspect.isawaitable(result):
-                await result
-            logger.info("Builtin plugin loaded: {}", pid_str)
+    await c.plugin_manager.load_all()
 
     logger.info("adomcore started")
 

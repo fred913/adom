@@ -1,12 +1,18 @@
 """Builtin memory_admin plugin."""
 
-from adomcore.plugins.builtin.memory_admin.tools import register_memory_admin_tools
-from adomcore.plugins.context import PluginContext
+from adomcore.domain.capabilities import FunctionBinding
+from adomcore.plugins.base import BasePlugin
+from adomcore.plugins.builtin.memory_admin.tools import memory_admin_function_bindings
 
 
-class BuiltinMemoryAdminPlugin:
-    def setup(self, ctx: PluginContext) -> None:
-        register_memory_admin_tools(ctx)
+class BuiltinMemoryAdminPlugin(BasePlugin):
+    plugin_id = "memory_admin"
+    plugin_name = "memory_admin"
+    plugin_version = "builtin"
+    plugin_builtin = True
+
+    def functions(self) -> list[FunctionBinding]:
+        return memory_admin_function_bindings()
 
 
 plugin = BuiltinMemoryAdminPlugin

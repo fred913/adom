@@ -81,6 +81,7 @@ class AtomicAgentsEngine:
             "messages": messages,
             "system": context.get("system", ""),
         }
+        kwargs.update(self._spec.extra_config)
         if tools:
             kwargs["tools"] = tools
 
@@ -114,6 +115,7 @@ class AtomicAgentsEngine:
                 *messages,
             ],
         }
+        kwargs.update(self._spec.extra_config)
         if tools:
             kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
 
@@ -200,6 +202,7 @@ class AtomicAgentsEngine:
                 *messages,
             ],
         }
+        kwargs.update(self._spec.extra_config)
         if tools:
             kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
 
@@ -235,6 +238,7 @@ class AtomicAgentsEngine:
                     model=self._spec.model,
                     max_tokens=2048,
                     messages=[{"role": "user", "content": prompt}],
+                    **self._spec.extra_config,
                 ),
             )
             text = cast(str, resp.content[0].text) if resp.content else "{}"
@@ -248,6 +252,7 @@ class AtomicAgentsEngine:
                 await self._client.chat.completions.create(
                     model=self._spec.model,
                     messages=[{"role": "user", "content": prompt}],
+                    **self._spec.extra_config,
                 ),
             )
             text = cast(str, resp.choices[0].message.content or "{}")
