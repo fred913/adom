@@ -1,0 +1,70 @@
+timezone: Asia/Shanghai
+default_thread_id: main
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  cors_origins: []
+
+runtime:
+  max_loop_steps: 8
+  auto_compact: true
+  compact_soft_ratio: 0.75
+  compact_hard_ratio: 0.9
+  recent_messages_window: 24
+
+storage:
+  root_dir: ./data
+
+scheduler:
+  backend: apscheduler
+  tick_seconds: 1
+
+plugins:
+  builtin:
+    cron: true
+    core_admin: true
+    memory_admin: true
+  plugin_dirs:
+    - ./local_plugins
+
+default_model_id: main
+
+models:
+  - id: main
+    provider: openai_compatible
+    api_base: http://localhost:11434/v1
+    model: qwen3
+    api_key: null
+    token_estimate_provider: heuristic
+    context_window: 32000
+    supports_tools: true
+    supports_structured_output: true
+    supports_streaming: true
+    enabled: true
+
+  - id: gpt4o
+    provider: openai_compatible
+    api_base: https://api.openai.com/v1
+    model: gpt-4o
+    api_key: sk-your-openai-key-here
+    token_estimate_provider: tiktoken
+    token_estimate_config:
+      encoding_name: cl100k_base
+    context_window: 128000
+    supports_tools: true
+    supports_structured_output: true
+    supports_streaming: true
+    enabled: false
+
+  - id: claude_main
+    provider: anthropic
+    api_base: null
+    model: claude-sonnet-4-5
+    api_key: null
+    token_estimate_provider: anthropic_count_tokens
+    context_window: 200000
+    supports_tools: true
+    supports_structured_output: true
+    supports_streaming: true
+    enabled: false

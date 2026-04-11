@@ -1,0 +1,1 @@
+"""adomcore domain layer."""
