@@ -29,4 +29,4 @@ class FunctionBinding:
 class CapabilityRef:
     kind: str  # "function" | "skill" | "mcp_tool"
     name: str
-    source: str  # plugin id or "builtin" or mcp server id
+    source: str  # plugin id or mcp server id

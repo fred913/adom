@@ -37,7 +37,7 @@ async def test_stdio_mcp_client_initializes_and_lists_tools(
         def __init__(self, read_stream: object, write_stream: object) -> None:
             captured["streams"] = (read_stream, write_stream)
 
-        async def __aenter__(self) -> "_FakeSession":
+        async def __aenter__(self) -> _FakeSession:
             captured["session_entered"] = True
             return self
 
@@ -94,7 +94,7 @@ async def test_stdio_mcp_client_call_tool_prefers_structured_content(
         def __init__(self, read_stream: object, write_stream: object) -> None:
             return None
 
-        async def __aenter__(self) -> "_FakeSession":
+        async def __aenter__(self) -> _FakeSession:
             return self
 
         async def __aexit__(self, *args: object) -> None:
@@ -139,7 +139,7 @@ async def test_stdio_mcp_client_raises_for_tool_error(
         def __init__(self, read_stream: object, write_stream: object) -> None:
             return None
 
-        async def __aenter__(self) -> "_FakeSession":
+        async def __aenter__(self) -> _FakeSession:
             return self
 
         async def __aexit__(self, *args: object) -> None:

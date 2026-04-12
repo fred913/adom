@@ -1,69 +1,53 @@
 """Plugin loader — discover and import plugin Python modules."""
 
+import inspect
 import importlib
 import sys
 from pathlib import Path
+from typing import Any
 from typing import cast
 
 from loguru import logger
 
-from adomcore.domain.ids import PluginId
 from adomcore.domain.plugins import PluginDescriptor, bind_plugin_metadata
 from adomcore.plugins.base import Plugin
 
 
 class PluginLoader:
+    def __init__(self, plugin_config: dict[str, dict[str, Any]] | None = None) -> None:
+        self._plugin_config = plugin_config or {}
+
     def load(self, descriptor: PluginDescriptor) -> Plugin:
-        """Import and return the plugin instance from its entry_point."""
-        module_path, attr = descriptor.entry_point.rsplit(":", 1)
-        try:
-            module = importlib.import_module(module_path)
-        except ModuleNotFoundError:
-            # Try loading from manifest_path directory
-            if descriptor.manifest_path:
-                plugin_dir = Path(descriptor.manifest_path).parent
-                self._add_to_path(plugin_dir)
-                module = importlib.import_module(module_path)
-            else:
-                raise
-        raw_plugin = getattr(module, attr)
-        plugin = self._coerce_plugin(raw_plugin)
-        bind_plugin_metadata(plugin, descriptor)
-        return plugin
-
-    def load_builtin(self, descriptor_or_id: PluginDescriptor | PluginId) -> Plugin:
-        descriptor = self._builtin_descriptor(descriptor_or_id)
-        module_path = f"adomcore.plugins.builtin.{descriptor.id}.plugin"
+        """Import and return the plugin instance from the plugin module."""
+        module_path = "plugin"
+        attr = "plugin"
+        if descriptor.manifest_path:
+            plugin_dir = Path(descriptor.manifest_path).parent
+            self._add_to_path(plugin_dir)
+            importlib.invalidate_caches()
+            sys.modules.pop(module_path, None)
+        else:
+            module_path = f"adomcore.plugins.builtin.{descriptor.id}.plugin"
         module = importlib.import_module(module_path)
-        raw_plugin = getattr(module, "plugin")
-        plugin = self._coerce_plugin(raw_plugin)
+        raw_plugin = getattr(module, attr)
+        plugin = self._coerce_plugin(raw_plugin, self._plugin_config.get(str(descriptor.id), {}))
         bind_plugin_metadata(plugin, descriptor)
         return plugin
 
     @staticmethod
-    def _builtin_descriptor(
-        descriptor_or_id: PluginDescriptor | PluginId,
-    ) -> PluginDescriptor:
-        if isinstance(descriptor_or_id, PluginDescriptor):
-            return descriptor_or_id
-        plugin_id = descriptor_or_id
-        return PluginDescriptor(
-            id=plugin_id,
-            name=str(plugin_id),
-            version="builtin",
-            description="",
-            entry_point=f"adomcore.plugins.builtin.{plugin_id}.plugin:plugin",
-            builtin=True,
-            enabled=True,
-        )
+    def _coerce_plugin(raw_plugin: object, config: dict[str, Any]) -> Plugin:
+        if callable(raw_plugin) and not isinstance(raw_plugin, type):
+            return cast(Plugin, PluginLoader._instantiate(raw_plugin, config))
+        if isinstance(raw_plugin, type):
+            return cast(Plugin, PluginLoader._instantiate(raw_plugin, config))
+        return cast(Plugin, raw_plugin)
 
     @staticmethod
-    def _coerce_plugin(raw_plugin: object) -> Plugin:
-        if callable(raw_plugin) and not isinstance(raw_plugin, type):
-            return cast(Plugin, raw_plugin())
-        if isinstance(raw_plugin, type):
-            return cast(Plugin, raw_plugin())
-        return cast(Plugin, raw_plugin)
+    def _instantiate(factory: object, config: dict[str, Any]) -> object:
+        signature = inspect.signature(cast(Any, factory))
+        if "config" in signature.parameters:
+            return cast(Any, factory)(config=config)
+        return cast(Any, factory)()
 
     @staticmethod
     def _add_to_path(directory: Path) -> None:

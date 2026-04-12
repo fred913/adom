@@ -21,12 +21,11 @@ scheduler:
   tick_seconds: 1
 
 plugins:
-  builtin:
-    cron: true
-    core_admin: true
-    memory_admin: true
   plugin_dirs:
     - ./local_plugins
+  config:
+    searchxng:
+      base_url: http://localhost:8080
 
 default_model_id: main
 

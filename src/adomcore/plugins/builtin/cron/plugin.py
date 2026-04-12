@@ -8,8 +8,7 @@ from adomcore.plugins.builtin.cron.tools import cron_function_bindings
 class BuiltinCronPlugin(BasePlugin):
     plugin_id = "cron"
     plugin_name = "cron"
-    plugin_version = "builtin"
-    plugin_builtin = True
+    plugin_description = "Cron scheduling tools."
 
     def functions(self) -> list[FunctionBinding]:
         return cron_function_bindings()

@@ -138,7 +138,7 @@ async def test_context_builder_includes_plugin_skills_and_system_prompt(
         model_service,
     )
 
-    plugin_file = tmp_path / "context_plugin.py"
+    plugin_file = tmp_path / "plugin.py"
     plugin_file.write_text(
         """
 from adomcore.domain.ids import SkillId
@@ -146,6 +146,9 @@ from adomcore.domain.skills import SkillSpec
 from adomcore.plugins.base import BasePlugin
 
 class ContextPlugin(BasePlugin):
+    plugin_id = 'context_plugin'
+    plugin_name = 'Context Plugin'
+
     def skills(self):
         return [SkillSpec(id=SkillId('plugin_skill'), name='Plugin Skill', content='From plugin')]
 
@@ -161,8 +164,6 @@ plugin = ContextPlugin
         name="Context Plugin",
         version="0.1.0",
         description="",
-        entry_point="context_plugin:plugin",
-        builtin=False,
         manifest_path=str(tmp_path / "plugin.yaml"),
     )
     await plugin_store.save_registry([desc])
@@ -178,3 +179,100 @@ plugin = ContextPlugin
         if plugin.id == PluginId("context_plugin")
     )
     assert plugin.name == "Context Plugin"
+
+
+async def test_context_builder_orders_plugin_system_prompts_by_priority(
+    tmp_path: Path,
+) -> None:
+    resolver = PathResolver(tmp_path)
+    json5 = Json5Store()
+    jsonl = JsonlStore()
+    thread_store = ThreadStore(resolver, json5, jsonl)
+    compact_store = CompactStore(resolver, json5)
+    skill_service = SkillService(SkillStore(resolver, json5))
+    capability_registry = CapabilityRegistry()
+    plugin_store = PluginStore(resolver, json5)
+    plugin_manager = PluginManager(
+        plugin_store, PluginLoader(), capability_registry, builtin_descriptors=[]
+    )
+    model_service = ModelService(
+        [
+            ModelSpec(
+                id="main",
+                provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                model="gpt-4o-mini",
+                context_window=32000,
+            )
+        ],
+        default_model_id="main",
+    )
+    builder = ContextBuilder(
+        thread_store,
+        compact_store,
+        skill_service,
+        capability_registry,
+        plugin_manager,
+        model_service,
+    )
+
+    high_dir = tmp_path / "high"
+    high_dir.mkdir()
+    (high_dir / "plugin.py").write_text(
+        """
+from adomcore.plugins.base import BasePlugin
+
+class HighPromptPlugin(BasePlugin):
+    plugin_id = 'high_prompt'
+    plugin_name = 'High Prompt'
+
+    def system_prompt(self):
+        return ('High prompt.', 100)
+
+plugin = HighPromptPlugin
+""".strip(),
+        encoding="utf-8",
+    )
+
+    low_dir = tmp_path / "low"
+    low_dir.mkdir()
+    (low_dir / "plugin.py").write_text(
+        """
+from adomcore.plugins.base import BasePlugin
+
+class LowPromptPlugin(BasePlugin):
+    plugin_id = 'low_prompt'
+    plugin_name = 'Low Prompt'
+
+    def system_prompt(self):
+        return ('Low prompt.', -1)
+
+plugin = LowPromptPlugin
+""".strip(),
+        encoding="utf-8",
+    )
+
+    await plugin_store.save_registry(
+        [
+            PluginDescriptor(
+                id=PluginId("low_prompt"),
+                name="Low Prompt",
+                version="0.1.0",
+                description="",
+                manifest_path=str(low_dir / "plugin.yaml"),
+            ),
+            PluginDescriptor(
+                id=PluginId("high_prompt"),
+                name="High Prompt",
+                version="0.1.0",
+                description="",
+                manifest_path=str(high_dir / "plugin.yaml"),
+            ),
+        ]
+    )
+    await plugin_manager.load_all()
+
+    context = builder.build(thread_id="main", active_model_id="main")
+
+    assert context.system_prompt.index("High prompt.") < context.system_prompt.index(
+        "Low prompt."
+    )

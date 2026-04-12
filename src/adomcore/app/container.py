@@ -147,7 +147,8 @@ def _default_tool_executor() -> ToolExecutor:
 
 
 def _default_plugin_loader() -> PluginLoader:
-    return PluginLoader()
+    settings = _default_settings()
+    return PluginLoader(settings.plugins.config)
 
 
 def _default_model_spec() -> ModelSpec:

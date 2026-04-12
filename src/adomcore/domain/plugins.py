@@ -12,8 +12,6 @@ class PluginManifestModel(BaseModel):
     name: str
     version: str = "0.1.0"
     description: str = ""
-    entry_point: str = "plugin:plugin"
-    builtin: bool = False
 
 
 class PluginDescriptor(BaseModel):
@@ -21,8 +19,6 @@ class PluginDescriptor(BaseModel):
     name: str
     version: str
     description: str
-    entry_point: str
-    builtin: bool
     enabled: bool = True
     manifest_path: str | None = None
 
@@ -32,8 +28,6 @@ class PluginMetadata(Protocol):
     name: str
     version: str
     description: str
-    entry_point: str
-    builtin: bool
     enabled: bool
     manifest_path: str | None
 
@@ -44,8 +38,6 @@ def bind_plugin_metadata(plugin: object, descriptor: PluginDescriptor) -> None:
     setattr(plugin, "name", descriptor.name)
     setattr(plugin, "version", descriptor.version)
     setattr(plugin, "description", descriptor.description)
-    setattr(plugin, "entry_point", descriptor.entry_point)
-    setattr(plugin, "builtin", descriptor.builtin)
     setattr(plugin, "enabled", descriptor.enabled)
     setattr(plugin, "manifest_path", descriptor.manifest_path)
 
@@ -57,8 +49,6 @@ def descriptor_from_plugin(plugin: PluginMetadata) -> PluginDescriptor:
         name=plugin.name,
         version=plugin.version,
         description=plugin.description,
-        entry_point=plugin.entry_point,
-        builtin=plugin.builtin,
         enabled=plugin.enabled,
         manifest_path=plugin.manifest_path,
     )

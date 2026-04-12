@@ -1,0 +1,1 @@
+"""Builtin SearchXNG plugin."""

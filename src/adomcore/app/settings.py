@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ApiSettings(BaseModel):
@@ -30,15 +30,9 @@ class SchedulerSettings(BaseModel):
     tick_seconds: int = 1
 
 
-class PluginBuiltinSettings(BaseModel):
-    cron: bool = True
-    core_admin: bool = True
-    memory_admin: bool = True
-
-
 class PluginSettings(BaseModel):
-    builtin: PluginBuiltinSettings = PluginBuiltinSettings()
-    plugin_dirs: list[str] = []
+    plugin_dirs: list[str] = Field(default_factory=list)
+    config: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class AppSettings(BaseModel):
@@ -50,7 +44,7 @@ class AppSettings(BaseModel):
     storage: StorageSettings = StorageSettings()
     scheduler: SchedulerSettings = SchedulerSettings()
     plugins: PluginSettings = PluginSettings()
-    models: list[dict[str, Any]] = []
+    models: list[dict[str, Any]] = Field(default_factory=list)
 
     @classmethod
     def load(cls, config_path: Path = Path("config.yaml")) -> AppSettings:

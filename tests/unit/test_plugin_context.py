@@ -45,7 +45,7 @@ async def test_plugin_context_registers_skill_and_mcp(tmp_path: Path) -> None:
 async def test_plugin_manager_collects_declared_functions_and_skills(
     tmp_path: Path,
 ) -> None:
-    plugin_file = tmp_path / "decl_plugin.py"
+    plugin_file = tmp_path / "plugin.py"
     plugin_file.write_text(
         """
 from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
@@ -54,6 +54,9 @@ from adomcore.domain.skills import SkillSpec
 from adomcore.plugins.base import BasePlugin
 
 class DeclPlugin(BasePlugin):
+    plugin_id = 'decl_plugin'
+    plugin_name = 'Decl Plugin'
+
     def functions(self):
         return [
             FunctionBinding(
@@ -95,8 +98,6 @@ plugin = DeclPlugin
         name="Decl Plugin",
         version="0.1.0",
         description="",
-        entry_point="decl_plugin:plugin",
-        builtin=False,
         manifest_path=str(tmp_path / "plugin.yaml"),
     )
 
@@ -116,14 +117,88 @@ plugin = DeclPlugin
 
 
 @pytest.mark.asyncio
+async def test_plugin_manager_sorts_system_prompts_by_priority(tmp_path: Path) -> None:
+    high_plugin_file = tmp_path / "plugin.py"
+    high_plugin_file.write_text(
+        """
+from adomcore.plugins.base import BasePlugin
+
+class PriorityPlugin(BasePlugin):
+    plugin_id = 'priority_plugin'
+    plugin_name = 'Priority Plugin'
+
+    def system_prompt(self):
+        return ('High priority prompt.', 100)
+
+plugin = PriorityPlugin
+""".strip(),
+        encoding="utf-8",
+    )
+
+    low_plugin_dir = tmp_path / "low"
+    low_plugin_dir.mkdir()
+    low_plugin_file = low_plugin_dir / "plugin.py"
+    low_plugin_file.write_text(
+        """
+from adomcore.plugins.base import BasePlugin
+
+class LowPriorityPlugin(BasePlugin):
+    plugin_id = 'low_priority_plugin'
+    plugin_name = 'Low Priority Plugin'
+
+    def system_prompt(self):
+        return ('Low priority prompt.', 1)
+
+plugin = LowPriorityPlugin
+""".strip(),
+        encoding="utf-8",
+    )
+
+    resolver = PathResolver(tmp_path)
+    json5 = Json5Store()
+    registry = CapabilityRegistry()
+    store = PluginStore(resolver, json5)
+    manager = PluginManager(store, PluginLoader(), registry, builtin_descriptors=[])
+
+    await store.save_registry(
+        [
+            PluginDescriptor(
+                id=PluginId("priority_plugin"),
+                name="Priority Plugin",
+                version="0.1.0",
+                description="",
+                manifest_path=str(tmp_path / "plugin.yaml"),
+            ),
+            PluginDescriptor(
+                id=PluginId("low_priority_plugin"),
+                name="Low Priority Plugin",
+                version="0.1.0",
+                description="",
+                manifest_path=str(low_plugin_dir / "plugin.yaml"),
+            ),
+        ]
+    )
+
+    await manager.load_all()
+
+    assert manager.system_prompt_parts() == [
+        "High priority prompt.",
+        "Low priority prompt.",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_plugin_functions_are_computed_dynamically(tmp_path: Path) -> None:
-    plugin_file = tmp_path / "dynamic_plugin.py"
+    plugin_file = tmp_path / "plugin.py"
     plugin_file.write_text(
         """
 from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
 from adomcore.plugins.base import BasePlugin
 
 class DynamicPlugin(BasePlugin):
+    plugin_id = 'dynamic_plugin'
+    plugin_name = 'Dynamic Plugin'
+
     def __init__(self):
         super().__init__()
         self.expose_dynamic = False
@@ -160,8 +235,6 @@ plugin = DynamicPlugin
         name="Dynamic Plugin",
         version="0.1.0",
         description="",
-        entry_point="dynamic_plugin:plugin",
-        builtin=False,
         manifest_path=str(tmp_path / "plugin.yaml"),
     )
 

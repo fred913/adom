@@ -6,7 +6,6 @@ import pytest
 from adomcore.app.lifespan import build_container
 from adomcore.app.settings import AppSettings
 from adomcore.domain.models import ModelProviderKind, ModelSpec
-from adomcore.integrations.llm.atomic_agents_engine import AtomicAgentsEngine
 from adomcore.integrations.token.tiktoken_estimator import TiktokenEstimator
 from adomcore.services.token_estimator import TokenEstimateRequest
 
@@ -138,6 +137,12 @@ async def test_openai_engine_passes_extra_config_to_provider(
 
     fake_module = types.SimpleNamespace(AsyncOpenAI=_FakeAsyncOpenAI)
     monkeypatch.setitem(sys.modules, "openai", fake_module)
+    monkeypatch.setattr(
+        "adomcore.integrations.llm.openai_compatible_client_factory.AsyncOpenAI",
+        _FakeAsyncOpenAI,
+    )
+
+    from adomcore.integrations.llm.atomic_agents_engine import AtomicAgentsEngine
 
     engine = AtomicAgentsEngine(
         ModelSpec(

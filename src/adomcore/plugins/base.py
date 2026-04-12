@@ -1,6 +1,6 @@
 """Plugin protocol and defaults for declarative plugin capabilities."""
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeAlias, runtime_checkable
 
 from adomcore.domain.capabilities import FunctionBinding
 from adomcore.domain.ids import PluginId
@@ -12,14 +12,15 @@ from adomcore.domain.plugins import (
 from adomcore.domain.skills import SkillSpec
 
 
+SystemPromptValue: TypeAlias = str | tuple[str, int | float]
+
+
 @runtime_checkable
 class Plugin(Protocol):
     id: PluginId
     name: str
     version: str
     description: str
-    entry_point: str
-    builtin: bool
     enabled: bool
     manifest_path: str | None
 
@@ -27,7 +28,7 @@ class Plugin(Protocol):
 
     def skills(self) -> list[SkillSpec]: ...
 
-    def system_prompt(self) -> str: ...
+    def system_prompt(self) -> SystemPromptValue: ...
 
 
 class BasePlugin:
@@ -35,8 +36,6 @@ class BasePlugin:
     plugin_name: str = ""
     plugin_version: str = "0.1.0"
     plugin_description: str = ""
-    plugin_entry_point: str = ""
-    plugin_builtin: bool = False
     plugin_enabled: bool = True
     plugin_manifest_path: str | None = None
 
@@ -47,8 +46,6 @@ class BasePlugin:
         name: str | None = None,
         version: str | None = None,
         description: str | None = None,
-        entry_point: str | None = None,
-        builtin: bool | None = None,
         enabled: bool | None = None,
         manifest_path: str | None = None,
     ) -> None:
@@ -59,10 +56,6 @@ class BasePlugin:
         self.description = (
             description if description is not None else cls.plugin_description
         )
-        self.entry_point = (
-            entry_point if entry_point is not None else cls.plugin_entry_point
-        )
-        self.builtin = builtin if builtin is not None else cls.plugin_builtin
         self.enabled = enabled if enabled is not None else cls.plugin_enabled
         self.manifest_path = (
             manifest_path if manifest_path is not None else cls.plugin_manifest_path
@@ -85,5 +78,5 @@ class BasePlugin:
     def skills(self) -> list[SkillSpec]:
         return []
 
-    def system_prompt(self) -> str:
+    def system_prompt(self) -> SystemPromptValue:
         return ""

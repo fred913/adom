@@ -8,5 +8,3 @@ class PluginManifest(BaseModel):
     name: str
     version: str = "0.1.0"
     description: str = ""
-    entry_point: str = "plugin:plugin"
-    builtin: bool = False

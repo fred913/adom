@@ -8,4 +8,3 @@ class PluginResponse(BaseModel):
     name: str
     version: str
     enabled: bool
-    builtin: bool

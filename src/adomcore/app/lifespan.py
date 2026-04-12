@@ -114,7 +114,7 @@ async def build_container(settings: AppSettings) -> AppContainer:
         c.agent_service, c.skill_service, c.mcp_service
     )
     c.scheduler_service = SchedulerService(c.cron_store)
-    c.plugin_loader = PluginLoader()
+    c.plugin_loader = PluginLoader(settings.plugins.config)
     c.plugin_manager = PluginManager(
         c.plugin_store, c.plugin_loader, c.capability_registry
     )
@@ -195,25 +195,14 @@ async def startup(c: AppContainer) -> None:
     assert isinstance(c.scheduler_service, SchedulerService)
     await c.scheduler_service.start()
 
-    # load plugins (builtin first)
-    from adomcore.domain.ids import PluginId
+    # load plugins
     from adomcore.services.capability_registry import CapabilityRegistry
     from adomcore.services.plugin_manager import PluginManager
 
     assert isinstance(c.plugin_manager, PluginManager)
     assert isinstance(c.capability_registry, CapabilityRegistry)
-    assert isinstance(c.settings, AppSettings)
 
-    builtin_cfg = c.settings.plugins.builtin
-    for pid_str, enabled in [
-        ("cron", builtin_cfg.cron),
-        ("core_admin", builtin_cfg.core_admin),
-        ("memory_admin", builtin_cfg.memory_admin),
-    ]:
-        if enabled:
-            await c.plugin_manager.activate_builtin(PluginId(pid_str))
-
-    await c.plugin_manager.load_all()
+    # await c.plugin_manager.load_all()
 
     logger.info("adomcore started")
 
