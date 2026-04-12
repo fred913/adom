@@ -92,7 +92,12 @@ class SSHSessionPool:
         )
         session_id = uuid4().hex
         self._clients[session_id] = client
-        return {"session_id": session_id, "host": host, "port": port, "username": username}
+        return {
+            "session_id": session_id,
+            "host": host,
+            "port": port,
+            "username": username,
+        }
 
     def execute_command(
         self, session_id: str, command: str, timeout: float = 30

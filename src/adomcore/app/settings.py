@@ -44,7 +44,7 @@ class AppSettings(BaseModel):
     storage: StorageSettings = StorageSettings()
     scheduler: SchedulerSettings = SchedulerSettings()
     plugins: PluginSettings = PluginSettings()
-    models: list[dict[str, Any]] = Field(default_factory=list)
+    models: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])
 
     @classmethod
     def load(cls, config_path: Path = Path("config.yaml")) -> AppSettings:

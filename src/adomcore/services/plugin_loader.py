@@ -1,11 +1,10 @@
 """Plugin loader — discover and import plugin Python modules."""
 
-import inspect
 import importlib
+import inspect
 import sys
 from pathlib import Path
-from typing import Any
-from typing import cast
+from typing import Any, cast
 
 from loguru import logger
 
@@ -30,7 +29,9 @@ class PluginLoader:
             module_path = f"adomcore.plugins.builtin.{descriptor.id}.plugin"
         module = importlib.import_module(module_path)
         raw_plugin = getattr(module, attr)
-        plugin = self._coerce_plugin(raw_plugin, self._plugin_config.get(str(descriptor.id), {}))
+        plugin = self._coerce_plugin(
+            raw_plugin, self._plugin_config.get(str(descriptor.id), {})
+        )
         bind_plugin_metadata(plugin, descriptor)
         return plugin
 

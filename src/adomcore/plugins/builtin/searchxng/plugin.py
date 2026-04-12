@@ -10,7 +10,9 @@ from adomcore.plugins.builtin.searchxng.tools import SearchXNGToolset
 class BuiltinSearchXNGPlugin(BasePlugin):
     plugin_id = "searchxng"
     plugin_name = "searchxng"
-    plugin_description = "Search tools backed by a configured SearchXNG/SearXNG instance."
+    plugin_description = (
+        "Search tools backed by a configured SearchXNG/SearXNG instance."
+    )
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__()

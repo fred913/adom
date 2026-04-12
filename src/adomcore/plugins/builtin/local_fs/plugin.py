@@ -8,7 +8,9 @@ from adomcore.plugins.builtin.local_fs.tools import local_fs_function_bindings
 class BuiltinLocalFsPlugin(BasePlugin):
     plugin_id = "local_fs"
     plugin_name = "local_fs"
-    plugin_description = "Local filesystem tools for reading, writing, and listing files."
+    plugin_description = (
+        "Local filesystem tools for reading, writing, and listing files."
+    )
 
     def functions(self) -> list[FunctionBinding]:
         return local_fs_function_bindings()

@@ -1,6 +1,6 @@
 """Plugin protocol and defaults for declarative plugin capabilities."""
 
-from typing import Protocol, TypeAlias, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from adomcore.domain.capabilities import FunctionBinding
 from adomcore.domain.ids import PluginId
@@ -11,8 +11,7 @@ from adomcore.domain.plugins import (
 )
 from adomcore.domain.skills import SkillSpec
 
-
-SystemPromptValue: TypeAlias = str | tuple[str, int | float]
+type SystemPromptValue = str | tuple[str, int | float]
 
 
 @runtime_checkable

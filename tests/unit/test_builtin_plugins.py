@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -47,11 +48,13 @@ def test_plugin_loader_loads_builtin_local_fs_plugin() -> None:
 
 
 @pytest.mark.asyncio
-async def test_searchxng_tool_uses_configured_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_searchxng_tool_uses_configured_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from adomcore.plugins.builtin.searchxng.tools import SearchXNGToolset
 
     class _Response:
-        def __enter__(self) -> "_Response":
+        def __enter__(self) -> _Response:
             return self
 
         def __exit__(self, *_args: object) -> None:
@@ -78,7 +81,9 @@ async def test_searchxng_tool_uses_configured_base_url(monkeypatch: pytest.Monke
         captured["timeout"] = timeout
         return _Response()
 
-    monkeypatch.setattr("adomcore.plugins.builtin.searchxng.tools.urlopen", _fake_urlopen)
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.searchxng.tools.urlopen", _fake_urlopen
+    )
     toolset = SearchXNGToolset({"base_url": "http://localhost:8080"})
 
     result = await toolset.search("adom")
@@ -88,8 +93,12 @@ async def test_searchxng_tool_uses_configured_base_url(monkeypatch: pytest.Monke
     assert result["results"][0]["title"] == "Example"
 
 
-def test_ask_user_tool_returns_questionary_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    from adomcore.plugins.builtin.ask_user.tools import _ask_user
+def test_ask_user_tool_returns_questionary_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from adomcore.plugins.builtin.ask_user.tools import (
+        _ask_user,  # type: ignore[import]
+    )
 
     class _Prompt:
         def ask(self) -> str:
@@ -131,7 +140,9 @@ def test_ssh_session_pool_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
             self.connected = True
             self.kwargs = kwargs
 
-        def exec_command(self, command: str, timeout: float) -> tuple[None, _Stream, _Stream]:
+        def exec_command(
+            self, command: str, timeout: float
+        ) -> tuple[None, _Stream, _Stream]:
             assert command == "pwd"
             assert timeout == 30
             return None, _Stream("/tmp\n"), _Stream("")
@@ -149,7 +160,8 @@ def test_ssh_session_pool_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
             return _Client()
 
     import sys
-    sys.modules["paramiko"] = _Paramiko()
+
+    sys.modules["paramiko"] = _Paramiko()  # type: ignore[assignment]
 
     pool = SSHSessionPool()
     opened = pool.open_session(host="localhost", username="fred")
@@ -161,7 +173,7 @@ def test_ssh_session_pool_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert closed["status"] == "closed"
 
 
-def test_local_fs_tools_read_write_and_list(tmp_path) -> None:
+def test_local_fs_tools_read_write_and_list(tmp_path: Path) -> None:
     from adomcore.plugins.builtin.local_fs.tools import list_dir, read_file, write_file
 
     sample = tmp_path / "sample.txt"

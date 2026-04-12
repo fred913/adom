@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, cast
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -12,6 +13,23 @@ from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
 from adomcore.domain.ids import PluginId
 
 _PLUGIN_ID = PluginId("searchxng")
+
+
+def _as_mapping(value: object) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, Any], value)
+    return {}
+
+
+def _as_result_list(value: object) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    typed_value = cast(list[object], value)
+    results: list[Mapping[str, Any]] = []
+    for item in typed_value:
+        if isinstance(item, Mapping):
+            results.append(cast(Mapping[str, Any], item))
+    return results
 
 
 class SearchXNGToolset:
@@ -52,20 +70,18 @@ class SearchXNGToolset:
         with urlopen(url, timeout=15) as response:
             payload = json.loads(response.read().decode("utf-8"))
 
-        results_raw = payload.get("results", [])
+        payload_dict = _as_mapping(payload)
+        results_raw = _as_result_list(payload_dict.get("results", []))
         results: list[dict[str, Any]] = []
-        if isinstance(results_raw, list):
-            for item in results_raw:
-                if not isinstance(item, dict):
-                    continue
-                results.append(
-                    {
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "content": item.get("content", ""),
-                        "engine": item.get("engine"),
-                    }
-                )
+        for item_dict in results_raw:
+            results.append(
+                {
+                    "title": item_dict.get("title", ""),
+                    "url": item_dict.get("url", ""),
+                    "content": item_dict.get("content", ""),
+                    "engine": item_dict.get("engine"),
+                }
+            )
 
         return {"query": keyword, "result_count": len(results), "results": results}
 
