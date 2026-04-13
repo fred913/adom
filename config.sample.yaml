@@ -26,6 +26,13 @@ plugins:
   config:
     searchxng:
       base_url: http://localhost:8080
+    opencode:
+      command: opencode
+      hostname: 127.0.0.1
+      port: [40000, 50000]
+      startup_timeout_seconds: 20
+      session_title: adom delegation
+      # override_model_id: anthropic/claude-sonnet-4-5      # If commented out, opencode uses its own model and adom does not override it.
 
 default_model_id: main
 

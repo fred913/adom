@@ -167,7 +167,7 @@ plugin = ContextPlugin
         manifest_path=str(tmp_path / "plugin.yaml"),
     )
     await plugin_store.save_registry([desc])
-    await plugin_manager.load_all()
+    plugin_manager.activate_instance(PluginLoader().load(desc))
 
     context = builder.build(thread_id="main", active_model_id="main")
 
@@ -192,9 +192,7 @@ async def test_context_builder_orders_plugin_system_prompts_by_priority(
     skill_service = SkillService(SkillStore(resolver, json5))
     capability_registry = CapabilityRegistry()
     plugin_store = PluginStore(resolver, json5)
-    plugin_manager = PluginManager(
-        plugin_store, PluginLoader(), capability_registry, builtin_descriptors=[]
-    )
+    plugin_manager = PluginManager(plugin_store, PluginLoader(), capability_registry)
     model_service = ModelService(
         [
             ModelSpec(
@@ -269,8 +267,28 @@ plugin = LowPromptPlugin
             ),
         ]
     )
-    await plugin_manager.load_all()
-
+    plugin_manager.activate_instance(
+        PluginLoader().load(
+            PluginDescriptor(
+                id=PluginId("low_prompt"),
+                name="Low Prompt",
+                version="0.1.0",
+                description="",
+                manifest_path=str(low_dir / "plugin.yaml"),
+            )
+        )
+    )
+    plugin_manager.activate_instance(
+        PluginLoader().load(
+            PluginDescriptor(
+                id=PluginId("high_prompt"),
+                name="High Prompt",
+                version="0.1.0",
+                description="",
+                manifest_path=str(high_dir / "plugin.yaml"),
+            )
+        )
+    )
     context = builder.build(thread_id="main", active_model_id="main")
 
     assert context.system_prompt.index("High prompt.") < context.system_prompt.index(

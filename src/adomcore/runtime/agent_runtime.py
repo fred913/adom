@@ -140,7 +140,6 @@ class AgentRuntime:
                             "arguments": getattr(action, "arguments", None),
                             "result": str(result.result),
                             "is_error": result.is_error,
-                            "error_detail": result.error_detail,
                         },
                     )
 
@@ -259,7 +258,6 @@ class AgentRuntime:
                         "arguments": getattr(action, "arguments", None),
                         "result": result.result,
                         "is_error": result.is_error,
-                        "error_detail": result.error_detail,
                     }
                     builder.add_tool_call_record(record)
                     yield TurnStreamEvent(
@@ -276,7 +274,6 @@ class AgentRuntime:
                             "arguments": getattr(action, "arguments", None),
                             "result": str(result.result),
                             "is_error": result.is_error,
-                            "error_detail": result.error_detail,
                         },
                     )
 

@@ -1,5 +1,6 @@
 """Tool executor — execute local function-provider callables."""
 
+import asyncio
 import inspect
 import json
 from typing import Any
@@ -35,13 +36,19 @@ class ToolExecutor:
         logger.debug(
             "Executing tool: {} with args: {}",
             function_name,
-            json.dumps(arguments, default=str)[:200],
+            json.dumps(arguments, default=str),
         )
         try:
             if inspect.iscoroutinefunction(handler):
                 result = await handler(**arguments)
             else:
-                result = handler(**arguments)
+                # result = handler(**arguments)
+                result = await asyncio.to_thread(handler, **arguments)
+            logger.debug(
+                "Tool response: {} -> {}",
+                function_name,
+                json.dumps(result, default=str),
+            )
             return result
         except Exception as exc:
             raise ToolExecutionError(function_name, str(exc)) from exc

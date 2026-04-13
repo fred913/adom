@@ -1,8 +1,10 @@
 """ActionRouter — route AgentDecision actions to executors."""
 
+import json
 from datetime import UTC
 from typing import Any, cast
 
+from loguru import logger
 from pydantic.dataclasses import dataclass
 
 from adomcore.domain.actions import (
@@ -16,9 +18,8 @@ from adomcore.domain.actions import (
 @dataclass
 class ActionExecutionResult:
     action: AgentAction
-    result: Any
+    result: Any  # Response if not error; else the error itself
     is_error: bool = False
-    error_detail: str | None = None
 
 
 class ActionRouter:
@@ -39,9 +40,7 @@ class ActionRouter:
             result = await self._dispatch(action)
             return ActionExecutionResult(action=action, result=result)
         except Exception as exc:
-            return ActionExecutionResult(
-                action=action, result=None, is_error=True, error_detail=str(exc)
-            )
+            return ActionExecutionResult(action=action, result=str(exc), is_error=True)
 
     async def _dispatch(self, action: AgentAction) -> Any:
         from adomcore.domain.actions import (
@@ -75,9 +74,22 @@ class ActionRouter:
 
             if session is None:
                 raise ValueError(f"MCP server not connected: {action.server_id}")
-            return await cast(McpClientProtocol, session).call_tool(
+            logger.debug(
+                "MCP tool call request: {}::{} -> {}",
+                action.server_id,
+                action.tool_name,
+                json.dumps(action.arguments, default=str),
+            )
+            result = await cast(McpClientProtocol, session).call_tool(
                 action.tool_name, action.arguments
             )
+            logger.debug(
+                "MCP tool response: {}::{} -> {}",
+                action.server_id,
+                action.tool_name,
+                json.dumps(result, default=str),
+            )
+            return result
         if isinstance(action, AddSkillAction):
             await self._mutation.add_skill(action.skill_id, action.name, action.content)
             return "skill added"

@@ -28,7 +28,6 @@ class PluginMetadata(Protocol):
     name: str
     version: str
     description: str
-    enabled: bool
     manifest_path: str | None
 
 
@@ -38,7 +37,6 @@ def bind_plugin_metadata(plugin: object, descriptor: PluginDescriptor) -> None:
     setattr(plugin, "name", descriptor.name)
     setattr(plugin, "version", descriptor.version)
     setattr(plugin, "description", descriptor.description)
-    setattr(plugin, "enabled", descriptor.enabled)
     setattr(plugin, "manifest_path", descriptor.manifest_path)
 
 
@@ -49,6 +47,6 @@ def descriptor_from_plugin(plugin: PluginMetadata) -> PluginDescriptor:
         name=plugin.name,
         version=plugin.version,
         description=plugin.description,
-        enabled=plugin.enabled,
+        enabled=True,
         manifest_path=plugin.manifest_path,
     )

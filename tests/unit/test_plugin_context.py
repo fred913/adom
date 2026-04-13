@@ -4,13 +4,16 @@ from typing import cast
 import pytest
 
 from adomcore.domain.ids import McpServerId, PluginId, SkillId
+from adomcore.domain.models import ModelProviderKind, ModelSpec
 from adomcore.domain.plugins import PluginDescriptor
 from adomcore.plugins.context import PluginContext
 from adomcore.services.agent_service import AgentService
 from adomcore.services.capability_registry import CapabilityRegistry
 from adomcore.services.mcp_service import McpService
+from adomcore.services.model_service import ModelService
 from adomcore.services.plugin_loader import PluginLoader
 from adomcore.services.plugin_manager import PluginManager
+from adomcore.services.plugin_model_gateway import PluginModelGateway
 from adomcore.services.self_mutation_service import SelfMutationService
 from adomcore.services.skill_service import SkillService
 from adomcore.services.tool_executor import ToolExecutor
@@ -39,6 +42,134 @@ async def test_plugin_context_registers_skill_and_mcp(tmp_path: Path) -> None:
 
     assert skill_service.get(SkillId("demo_skill")) is not None
     assert mcp_service.get(McpServerId("demo_mcp")) is not None
+
+
+def test_plugin_context_exposes_model_service() -> None:
+    model_service = ModelService(
+        [
+            ModelSpec(
+                id="main",
+                provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                model="gpt-4o-mini",
+                context_window=32000,
+            )
+        ],
+        default_model_id="main",
+    )
+    ctx = PluginContext(
+        CapabilityRegistry(),
+        model_gateway=PluginModelGateway(model_service),
+    )
+
+    assert ctx.model_service.get_default().id == "main"
+
+
+@pytest.mark.asyncio
+async def test_plugin_context_model_handle_generates_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMessage:
+        content = "plugin reply"
+
+    class _FakeChoice:
+        message = _FakeMessage()
+
+    class _FakeResponse:
+        choices = [_FakeChoice()]
+
+    class _FakeCompletions:
+        async def create(self, **_kwargs: object) -> _FakeResponse:
+            return _FakeResponse()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeAsyncOpenAI:
+        def __init__(self, **_kwargs: object) -> None:
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(
+        "adomcore.integrations.llm.openai_compatible_client_factory.AsyncOpenAI",
+        _FakeAsyncOpenAI,
+    )
+    monkeypatch.setattr(
+        "adomcore.services.plugin_model_gateway.AsyncOpenAI",
+        _FakeAsyncOpenAI,
+    )
+
+    model_service = ModelService(
+        [
+            ModelSpec(
+                id="plugin_model",
+                provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                model="gpt-4o-mini",
+                context_window=32000,
+            )
+        ],
+        default_model_id="plugin_model",
+    )
+    ctx = PluginContext(
+        CapabilityRegistry(),
+        model_gateway=PluginModelGateway(model_service),
+    )
+
+    text = await ctx.get_model("plugin_model").generate_text("hello")
+
+    assert text == "plugin reply"
+
+
+@pytest.mark.asyncio
+async def test_plugin_context_model_handle_generates_structured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMessage:
+        content = '{"status":"ok"}'
+
+    class _FakeChoice:
+        message = _FakeMessage()
+
+    class _FakeResponse:
+        choices = [_FakeChoice()]
+
+    class _FakeCompletions:
+        async def create(self, **_kwargs: object) -> _FakeResponse:
+            return _FakeResponse()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeAsyncOpenAI:
+        def __init__(self, **_kwargs: object) -> None:
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(
+        "adomcore.integrations.llm.openai_compatible_client_factory.AsyncOpenAI",
+        _FakeAsyncOpenAI,
+    )
+    monkeypatch.setattr(
+        "adomcore.services.plugin_model_gateway.AsyncOpenAI",
+        _FakeAsyncOpenAI,
+    )
+
+    model_service = ModelService(
+        [
+            ModelSpec(
+                id="plugin_model",
+                provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                model="gpt-4o-mini",
+                context_window=32000,
+            )
+        ],
+        default_model_id="plugin_model",
+    )
+    ctx = PluginContext(
+        CapabilityRegistry(),
+        model_gateway=PluginModelGateway(model_service),
+    )
+
+    data = await ctx.get_model("plugin_model").generate_structured("hello")
+
+    assert data == {"status": "ok"}
 
 
 @pytest.mark.asyncio
@@ -102,7 +233,7 @@ plugin = DeclPlugin
     )
 
     await store.save_registry([desc])
-    await manager.load_all()
+    manager.activate_instance(PluginLoader().load(desc))
 
     assert registry.get_spec("demo_tool") is not None
     plugin = next(
@@ -158,7 +289,7 @@ plugin = LowPriorityPlugin
     json5 = Json5Store()
     registry = CapabilityRegistry()
     store = PluginStore(resolver, json5)
-    manager = PluginManager(store, PluginLoader(), registry, builtin_descriptors=[])
+    manager = PluginManager(store, PluginLoader(), registry)
 
     await store.save_registry(
         [
@@ -178,8 +309,28 @@ plugin = LowPriorityPlugin
             ),
         ]
     )
-
-    await manager.load_all()
+    manager.activate_instance(
+        PluginLoader().load(
+            PluginDescriptor(
+                id=PluginId("priority_plugin"),
+                name="Priority Plugin",
+                version="0.1.0",
+                description="",
+                manifest_path=str(tmp_path / "plugin.yaml"),
+            )
+        )
+    )
+    manager.activate_instance(
+        PluginLoader().load(
+            PluginDescriptor(
+                id=PluginId("low_priority_plugin"),
+                name="Low Priority Plugin",
+                version="0.1.0",
+                description="",
+                manifest_path=str(low_plugin_dir / "plugin.yaml"),
+            )
+        )
+    )
 
     assert manager.system_prompt_parts() == [
         "High priority prompt.",
@@ -239,7 +390,7 @@ plugin = DynamicPlugin
     )
 
     await store.save_registry([desc])
-    await manager.load_all()
+    manager.activate_instance(PluginLoader().load(desc))
 
     assert registry.get_spec("dynamic_tool") is None
 

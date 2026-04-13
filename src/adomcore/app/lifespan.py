@@ -6,6 +6,7 @@ from adomcore.app.container import AppContainer
 from adomcore.app.logging import setup_logging
 from adomcore.app.paths import PathFactory
 from adomcore.app.settings import AppSettings
+from adomcore.plugins.context import PluginContext
 
 
 async def build_container(settings: AppSettings) -> AppContainer:
@@ -56,6 +57,7 @@ async def build_container(settings: AppSettings) -> AppContainer:
     from adomcore.services.model_service import ModelService
     from adomcore.services.plugin_loader import PluginLoader
     from adomcore.services.plugin_manager import PluginManager
+    from adomcore.services.plugin_model_gateway import PluginModelGateway
     from adomcore.services.scheduler_service import SchedulerService
     from adomcore.services.self_mutation_service import SelfMutationService
     from adomcore.services.skill_service import SkillService
@@ -90,6 +92,7 @@ async def build_container(settings: AppSettings) -> AppContainer:
         for m in settings.models
     ]
     c.model_service = ModelService(model_specs, settings.default_model_id)
+    c.plugin_model_gateway = PluginModelGateway(c.model_service)
 
     # engine
     state = c.agent_service.load()
@@ -115,8 +118,16 @@ async def build_container(settings: AppSettings) -> AppContainer:
     )
     c.scheduler_service = SchedulerService(c.cron_store)
     c.plugin_loader = PluginLoader(settings.plugins.config)
+    plugin_context = PluginContext(
+        c.capability_registry,
+        c.self_mutation_service,
+        c.plugin_model_gateway,
+    )
     c.plugin_manager = PluginManager(
-        c.plugin_store, c.plugin_loader, c.capability_registry
+        c.plugin_store,
+        c.plugin_loader,
+        c.capability_registry,
+        plugin_context,
     )
     c.context_builder = ContextBuilder(
         c.thread_store,
@@ -194,15 +205,6 @@ async def startup(c: AppContainer) -> None:
 
     assert isinstance(c.scheduler_service, SchedulerService)
     await c.scheduler_service.start()
-
-    # load plugins
-    from adomcore.services.capability_registry import CapabilityRegistry
-    from adomcore.services.plugin_manager import PluginManager
-
-    assert isinstance(c.plugin_manager, PluginManager)
-    assert isinstance(c.capability_registry, CapabilityRegistry)
-
-    # await c.plugin_manager.load_all()
 
     logger.info("adomcore started")
 

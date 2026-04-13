@@ -11,10 +11,15 @@ from pydantic.dataclasses import dataclass
 from adomcore.app.paths import AppPaths, PathFactory
 from adomcore.app.settings import AppSettings
 from adomcore.domain.actions import AgentDecision, RespondAction
-from adomcore.domain.models import ModelProviderKind, ModelSpec
+from adomcore.domain.models import (
+    ModelProviderKind,
+    ModelSpec,
+    ModelSpec_OpenAICompatible,
+)
 from adomcore.domain.policies import TokenBudgetPolicy
 from adomcore.domain.streaming import EngineDecisionEvent, EngineEvent
 from adomcore.integrations.llm.engine_protocol import AgentEngine
+from adomcore.plugins.context import PluginContext
 from adomcore.runtime.action_router import ActionRouter
 from adomcore.runtime.agent_runtime import AgentRuntime
 from adomcore.runtime.compact_manager import CompactManager
@@ -29,6 +34,7 @@ from adomcore.services.mcp_session_manager import McpSessionManager
 from adomcore.services.model_service import ModelService
 from adomcore.services.plugin_loader import PluginLoader
 from adomcore.services.plugin_manager import PluginManager
+from adomcore.services.plugin_model_gateway import PluginModelGateway
 from adomcore.services.scheduler_service import SchedulerService
 from adomcore.services.self_mutation_service import SelfMutationService
 from adomcore.services.skill_service import SkillService
@@ -152,7 +158,7 @@ def _default_plugin_loader() -> PluginLoader:
 
 
 def _default_model_spec() -> ModelSpec:
-    return ModelSpec(
+    return ModelSpec_OpenAICompatible(
         id="main",
         provider=ModelProviderKind.OPENAI_COMPATIBLE,
         model="default",
@@ -163,6 +169,10 @@ def _default_model_spec() -> ModelSpec:
 def _default_model_service() -> ModelService:
     spec = _default_model_spec()
     return ModelService([spec], spec.id)
+
+
+def _default_plugin_model_gateway() -> PluginModelGateway:
+    return PluginModelGateway(_default_model_service())
 
 
 def _default_engine() -> AgentEngine:
@@ -238,10 +248,16 @@ def _default_cron_dispatch_service() -> CronDispatchService:
 
 def _default_plugin_manager() -> PluginManager:
     registry = _default_capability_registry()
+    plugin_context = PluginContext(
+        registry,
+        _default_self_mutation_service(),
+        _default_plugin_model_gateway(),
+    )
     return PluginManager(
         _default_plugin_store(),
         _default_plugin_loader(),
         registry,
+        plugin_context,
     )
 
 
@@ -274,6 +290,9 @@ class AppContainer:
     tool_executor: ToolExecutor = field(default_factory=_default_tool_executor)
     plugin_loader: PluginLoader = field(default_factory=_default_plugin_loader)
     plugin_manager: PluginManager = field(default_factory=_default_plugin_manager)
+    plugin_model_gateway: PluginModelGateway = field(
+        default_factory=_default_plugin_model_gateway
+    )
     scheduler_service: SchedulerService = field(
         default_factory=_default_scheduler_service
     )

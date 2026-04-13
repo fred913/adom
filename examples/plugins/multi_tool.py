@@ -28,6 +28,10 @@ def list_dir(path: str = ".") -> dict[str, list[str]]:
 
 
 class LocalFsPlugin(BasePlugin):
+    plugin_id = "local_fs"
+    plugin_name = "Local FS"
+    plugin_description = "Local filesystem example plugin."
+
     def functions(self) -> list[FunctionBinding]:
         return [
             FunctionBinding(
@@ -76,11 +80,7 @@ class LocalFsPlugin(BasePlugin):
 
 async def main() -> None:
     registry = CapabilityRegistry()
-    plugin = LocalFsPlugin(
-        plugin_id="local_fs",
-        name="Local FS",
-        description="Local filesystem example plugin.",
-    )
+    plugin = LocalFsPlugin()
     for binding in plugin.functions():
         registry.register(binding.spec, binding.handler)
     executor = ToolExecutor(registry)

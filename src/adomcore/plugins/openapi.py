@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from adomcore.domain.capabilities import FunctionBinding, FunctionSpec
+from adomcore.domain.ids import PluginId
 from adomcore.plugins.base import BasePlugin
 
 
@@ -62,12 +63,11 @@ class OpenApiPlugin(BasePlugin):
         base_url: str,
         auth_headers: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(
-            plugin_id=plugin_id,
-            name=name or plugin_id,
-            version=version,
-            description=description,
-        )
+        super().__init__()
+        self.id = PluginId(plugin_id)
+        self.name = name or plugin_id
+        self.version = version
+        self.description = description
         self._spec = spec
         self._base_url = base_url.rstrip("/")
         self._auth_headers = auth_headers or {}

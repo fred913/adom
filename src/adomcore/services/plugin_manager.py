@@ -7,7 +7,7 @@ from adomcore.domain.ids import PluginId
 from adomcore.domain.plugins import PluginDescriptor, descriptor_from_plugin
 from adomcore.domain.skills import SkillSpec
 from adomcore.plugins.base import BasePlugin, Plugin, SystemPromptValue
-from adomcore.plugins.builtin import builtin_plugin_descriptors
+from adomcore.plugins.context import PluginContext
 from adomcore.services.capability_registry import CapabilityRegistry
 from adomcore.services.plugin_loader import PluginLoader
 from adomcore.storage.stores.plugin_store import PluginStore
@@ -19,32 +19,20 @@ class PluginManager:
         store: PluginStore,
         loader: PluginLoader,
         registry: CapabilityRegistry,
-        builtin_descriptors: list[PluginDescriptor] | None = None,
+        plugin_context: PluginContext | None = None,
     ) -> None:
         self._store = store
         self._loader = loader
         self._registry = registry
+        self._plugin_context = plugin_context
         self._plugins: dict[PluginId, Plugin] = {}
+        self._descriptors: dict[PluginId, PluginDescriptor] = {}
         self._persisted_plugin_ids: set[PluginId] = set()
-        self._builtin_descriptors = builtin_descriptors or builtin_plugin_descriptors()
-        self._registry.register_provider("plugins", self.function_bindings)
-
-    async def load_all(self) -> None:
-        self._plugins.clear()
-        self._persisted_plugin_ids.clear()
-
-        for desc in self._builtin_descriptors:
-            if desc.enabled:
-                await self._activate(desc)
-            else:
-                self._plugins[desc.id] = BasePlugin.metadata_only(desc)
-
         for desc in self._store.load_registry():
             self._persisted_plugin_ids.add(desc.id)
-            if desc.enabled:
-                await self._activate(desc)
-            else:
-                self._plugins[desc.id] = BasePlugin.metadata_only(desc)
+            self._descriptors[desc.id] = desc
+            self._plugins[desc.id] = BasePlugin.metadata_only(desc)
+        self._registry.register_provider("plugins", self.function_bindings)
 
     async def _activate(self, desc: PluginDescriptor) -> None:
         try:
@@ -57,30 +45,36 @@ class PluginManager:
         pid = instance.id
         if not pid:
             raise ValueError("Plugin instance is missing bound metadata: id")
-        instance.enabled = True
+        if self._plugin_context is not None:
+            instance = instance.bind_context(self._plugin_context)
+        self._descriptors[pid] = descriptor_from_plugin(instance).model_copy(
+            update={"enabled": True}
+        )
         self._plugins[pid] = instance
         logger.info("Plugin activated: {}", instance.id)
 
     async def enable(self, pid: PluginId) -> None:
-        plugin = self._plugins.get(pid)
-        if plugin is None:
+        descriptor = self._descriptors.get(pid)
+        if descriptor is None:
             raise KeyError(f"Plugin not found: {pid!r}")
-        updated = descriptor_from_plugin(plugin).model_copy(update={"enabled": True})
+        updated = descriptor.model_copy(update={"enabled": True})
+        self._descriptors[pid] = updated
         await self._activate(updated)
         await self._save_registry()
 
     async def disable(self, pid: PluginId) -> None:
-        plugin = self._plugins.get(pid)
-        if plugin is None:
+        descriptor = self._descriptors.get(pid)
+        if descriptor is None:
             raise KeyError(f"Plugin not found: {pid!r}")
-        updated = descriptor_from_plugin(plugin).model_copy(update={"enabled": False})
+        updated = descriptor.model_copy(update={"enabled": False})
+        self._descriptors[pid] = updated
         self._plugins[pid] = BasePlugin.metadata_only(updated)
         await self._save_registry()
 
     async def _save_registry(self) -> None:
         await self._store.save_registry(
             [
-                descriptor_from_plugin(self._plugins[pid])
+                self._descriptors[pid]
                 for pid in self._persisted_plugin_ids
                 if pid in self._plugins
             ]
@@ -89,10 +83,16 @@ class PluginManager:
     def list_all(self) -> list[Plugin]:
         return list(self._plugins.values())
 
+    def is_enabled(self, pid: PluginId) -> bool:
+        descriptor = self._descriptors.get(pid)
+        return descriptor.enabled if descriptor is not None else False
+
     def function_bindings(self) -> list[FunctionBinding]:
         bindings: list[FunctionBinding] = []
         for plugin in self._plugins.values():
-            if not plugin.enabled:
+            if not self.is_enabled(plugin.id):
+                continue
+            if type(plugin) is BasePlugin:
                 continue
             try:
                 bindings.extend(plugin.functions())
@@ -105,7 +105,9 @@ class PluginManager:
     def list_enabled_skills(self) -> list[SkillSpec]:
         skills: list[SkillSpec] = []
         for plugin in self._plugins.values():
-            if not plugin.enabled:
+            if not self.is_enabled(plugin.id):
+                continue
+            if type(plugin) is BasePlugin:
                 continue
             try:
                 skills.extend(plugin.skills())
@@ -118,7 +120,9 @@ class PluginManager:
     def system_prompt_parts(self) -> list[str]:
         prioritized_parts: list[tuple[int | float, str]] = []
         for plugin in self._plugins.values():
-            if not plugin.enabled:
+            if not self.is_enabled(plugin.id):
+                continue
+            if type(plugin) is BasePlugin:
                 continue
             try:
                 prompt_value = plugin.system_prompt()

@@ -16,6 +16,10 @@ async def fetch_url(url: str) -> dict[str, object]:
 
 
 class HttpFetchPlugin(BasePlugin):
+    plugin_id = "http_fetch"
+    plugin_name = "HTTP Fetch"
+    plugin_description = "Fetch the first bytes from a URL."
+
     def functions(self) -> list[FunctionBinding]:
         return [
             FunctionBinding(
@@ -36,11 +40,7 @@ class HttpFetchPlugin(BasePlugin):
 
 async def main() -> None:
     registry = CapabilityRegistry()
-    plugin = HttpFetchPlugin(
-        plugin_id="http_fetch",
-        name="HTTP Fetch",
-        description="Fetch the first bytes from a URL.",
-    )
+    plugin = HttpFetchPlugin()
     for binding in plugin.functions():
         registry.register(binding.spec, binding.handler)
     executor = ToolExecutor(registry)

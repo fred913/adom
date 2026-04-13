@@ -134,6 +134,13 @@ point it at the OpenAPI spec/base URL you want to expose as agent-callable tools
 Plugin instances now carry their own runtime metadata (`id`, `name`, `description`,
 etc.), so the loaded plugin object itself is the single source of truth.
 
+Built-in plugins also include `opencode`, which can call an `opencode serve`
+instance over HTTP. On first use it will try `GET /global/health`, start
+`opencode serve` if needed, create a session, and submit the delegated task.
+Later calls reuse the same live session automatically. Configure it under
+`plugins.config.opencode` in `config.yaml` if you need a custom command, host,
+port, auth, or startup timeout.
+
 ---
 
 ## Tests

@@ -15,7 +15,7 @@ async def list_plugins(request: Request) -> list[PluginResponse]:
             id=str(plugin.id),
             name=plugin.name,
             version=plugin.version,
-            enabled=plugin.enabled,
+            enabled=c.plugin_manager.is_enabled(plugin.id),
         )
         for plugin in c.plugin_manager.list_all()
     ]

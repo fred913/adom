@@ -12,7 +12,4 @@ def setup_logging(log_dir: Path, level: str = "INFO") -> None:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     logger.remove()
     logger.add(sys.stderr, level=level, serialize=False)
-    logger.add(log_dir / f"{stamp}.log", level=level, serialize=False, rotation=None)
-    logger.add(
-        log_dir / f"{stamp}-errors.log", level="ERROR", serialize=False, rotation=None
-    )
+    logger.add(log_dir / f"{stamp}.log", level="DEBUG", serialize=False, rotation=None)

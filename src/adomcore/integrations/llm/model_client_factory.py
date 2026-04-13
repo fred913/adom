@@ -1,9 +1,27 @@
 """Model client factory — routes by ModelProviderKind."""
 
-from adomcore.domain.models import ModelProviderKind, ModelSpec
+from typing import overload
+
+from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
+
+from adomcore.domain.models import (
+    ModelProviderKind,
+    ModelSpec,
+    ModelSpec_Anthropic,
+    ModelSpec_OpenAICompatible,
+)
 
 
-def make_client(spec: ModelSpec) -> object:
+@overload  # basically a best-effort type annotation
+def make_client(spec: ModelSpec_Anthropic) -> AsyncAnthropic: ...
+@overload
+def make_client(spec: ModelSpec_OpenAICompatible) -> AsyncOpenAI: ...
+@overload
+def make_client(spec: ModelSpec) -> AsyncAnthropic | AsyncOpenAI: ...
+
+
+def make_client(spec: ModelSpec) -> AsyncAnthropic | AsyncOpenAI:
     if spec.provider == ModelProviderKind.ANTHROPIC:
         from adomcore.integrations.llm.anthropic_client_factory import (
             make_anthropic_client,

@@ -13,6 +13,10 @@ def add(a: float, b: float) -> dict[str, float]:
 
 
 class CalculatorPlugin(BasePlugin):
+    plugin_id = "calculator"
+    plugin_name = "Calculator"
+    plugin_description = "A simple calculator example plugin."
+
     def functions(self) -> list[FunctionBinding]:
         return [
             FunctionBinding(
@@ -36,11 +40,7 @@ class CalculatorPlugin(BasePlugin):
 
 async def main() -> None:
     registry = CapabilityRegistry()
-    plugin = CalculatorPlugin(
-        plugin_id="calculator",
-        name="Calculator",
-        description="A simple calculator example plugin.",
-    )
+    plugin = CalculatorPlugin()
     for binding in plugin.functions():
         registry.register(binding.spec, binding.handler)
     executor = ToolExecutor(registry)

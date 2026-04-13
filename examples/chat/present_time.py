@@ -48,6 +48,10 @@ def format_time(timezone_label: str = "UTC") -> dict[str, str]:
 
 
 class DemoPlugin(BasePlugin):
+    plugin_id = "demo"
+    plugin_name = "Demo Plugin"
+    plugin_description = "In-memory demo plugin for the present_time example."
+
     def functions(self) -> list[FunctionBinding]:
         return [
             FunctionBinding(
@@ -93,13 +97,7 @@ class DemoPlugin(BasePlugin):
 
 
 def activate_demo_plugin(container: AppContainer) -> None:
-    container.plugin_manager.activate_instance(
-        DemoPlugin(
-            plugin_id="demo",
-            name="Demo Plugin",
-            description="In-memory demo plugin for the present_time example.",
-        )
-    )
+    container.plugin_manager.activate_instance(DemoPlugin())
 
 
 def _load_demo_settings(temp_root: Path) -> AppSettings:

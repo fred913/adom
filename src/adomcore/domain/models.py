@@ -2,7 +2,7 @@
 
 from dataclasses import field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic.dataclasses import dataclass
 
@@ -35,3 +35,13 @@ class ModelSpec:
         TokenEstimateProviderKind.HEURISTIC
     )
     token_estimate_config: dict[str, Any] = field(default_factory=lambda: {})
+
+
+class ModelSpec_Anthropic(ModelSpec):
+    provider: Literal[ModelProviderKind.ANTHROPIC] = ModelProviderKind.ANTHROPIC
+
+
+class ModelSpec_OpenAICompatible(ModelSpec):
+    provider: Literal[ModelProviderKind.OPENAI_COMPATIBLE] = (
+        ModelProviderKind.OPENAI_COMPATIBLE
+    )

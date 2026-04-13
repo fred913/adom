@@ -5,7 +5,20 @@ from typing import Any
 import pytest
 
 from adomcore.domain.ids import PluginId
+from adomcore.domain.models import ModelProviderKind, ModelSpec
+from adomcore.plugins.context import PluginContext
+from adomcore.services.capability_registry import CapabilityRegistry
+from adomcore.services.model_service import ModelService
 from adomcore.services.plugin_loader import PluginLoader
+from adomcore.services.plugin_model_gateway import PluginModelGateway
+
+
+def _fixed_port(_port_range: tuple[int, int] = (40000, 50000)) -> int:
+    return 45678
+
+
+def _fixed_password(_length: int = 32) -> str:
+    return "AbC123XyZ789PasswordSafeToken000"
 
 
 def test_plugin_loader_loads_builtin_searchxng_plugin() -> None:
@@ -45,6 +58,80 @@ def test_plugin_loader_loads_builtin_local_fs_plugin() -> None:
         "write_file",
         "list_dir",
     ]
+
+
+def test_plugin_loader_loads_builtin_opencode_plugin() -> None:
+    from adomcore.domain.plugins import PluginDescriptor
+
+    plugin = PluginLoader(
+        {"opencode": {"port": 4096, "override_model_id": "anthropic/claude-sonnet-4-5"}}
+    ).load(
+        PluginDescriptor(
+            id=PluginId("opencode"),
+            name="opencode",
+            version="0.1.0",
+            description="",
+            manifest_path=None,
+        )
+    )
+
+    assert plugin.id == PluginId("opencode")
+    assert plugin.functions()[0].spec.name == "opencode_execute_task"
+
+
+def test_opencode_tool_merges_override_model_into_inline_config() -> None:
+    from adomcore.plugins.builtin.opencode.tools import OpencodeToolset
+
+    merged = OpencodeToolset._merged_opencode_inline_config(  # type: ignore
+        '{"autoupdate":true,"server":{"port":4096}}',
+        {"model": "anthropic/claude-sonnet-4-5"},
+    )
+
+    assert merged == {
+        "autoupdate": True,
+        "server": {"port": 4096},
+        "model": "anthropic/claude-sonnet-4-5",
+    }
+
+
+def test_opencode_tool_builds_override_config_from_adom_model_spec() -> None:
+    from adomcore.plugins.builtin.opencode.tools import OpencodeToolset
+
+    toolset = OpencodeToolset({"override_model_id": "main"})
+    context = PluginContext(
+        CapabilityRegistry(),
+        model_gateway=PluginModelGateway(
+            ModelService(
+                [
+                    ModelSpec(
+                        id="main",
+                        provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                        model="gpt-5.4",
+                        context_window=32000,
+                        api_base="https://ai.example.com/v1",
+                        api_key="secret-key",
+                        extra_config={"timeout": 1234},
+                    )
+                ],
+                default_model_id="main",
+            )
+        ),
+    )
+
+    toolset.bind_context(context)
+
+    assert toolset._resolved_override_config() == {  # type: ignore
+        "model": "gpt-5.4",
+        "provider": {
+            "openai": {
+                "options": {
+                    "timeout": 1234,
+                    "apiKey": "secret-key",
+                    "baseURL": "https://ai.example.com/v1",
+                }
+            }
+        },
+    }
 
 
 @pytest.mark.asyncio
@@ -111,6 +198,160 @@ def test_ask_user_tool_returns_questionary_answer(
     monkeypatch.setattr("questionary.text", _fake_text)
 
     assert _ask_user("Continue?") == {"question": "Continue?", "answer": "yes"}
+
+
+@pytest.mark.asyncio
+async def test_opencode_tool_starts_server_then_reuses_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    from adomcore.plugins.builtin.opencode.tools import OpencodeToolset
+
+    class _Response:
+        def __init__(self, payload: object, status_code: int = 200) -> None:
+            self._payload = payload
+            self.status_code = status_code
+            self.text = json.dumps(payload)
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                request = httpx.Request("GET", "http://localhost")
+                response = httpx.Response(self.status_code, request=request)
+                raise httpx.HTTPStatusError(
+                    "request failed",
+                    request=request,
+                    response=response,
+                )
+
+    health_attempts = 0
+    created_sessions = 0
+    posted_messages: list[dict[str, Any]] = []
+    spawned_commands: list[list[str]] = []
+    spawned_envs: list[dict[str, str]] = []
+
+    def _fake_popen(command: list[str], **kwargs: Any) -> object:
+        spawned_commands.append(command)
+        spawned_envs.append(dict(kwargs["env"]))
+
+        class _Process:
+            pass
+
+        return _Process()
+
+    def _fake_httpx_request(
+        method: str,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: float,
+    ) -> _Response:
+        nonlocal health_attempts, created_sessions
+        assert timeout == 60
+        assert params is None
+        data = json
+        assert headers is not None
+
+        if url.endswith("/global/health"):
+            health_attempts += 1
+            if health_attempts == 1:
+                raise httpx.ConnectError(
+                    "connection refused",
+                    request=httpx.Request(method, url),
+                )
+            return _Response({"healthy": True, "version": "1.0.0"})
+        if url.endswith("/session") and method == "POST":
+            created_sessions += 1
+            return _Response({"id": "sess_1"})
+        if url.endswith("/session/sess_1") and method == "GET":
+            return _Response({"id": "sess_1"})
+        if url.endswith("/session/sess_1/message") and method == "POST":
+            assert data is not None
+            posted_messages.append(data)
+            return _Response(
+                {"info": {"id": "msg_1"}, "parts": [{"type": "text", "text": "done"}]}
+            )
+        raise AssertionError(f"Unexpected request: {method} {url}")
+
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.httpx.request", _fake_httpx_request
+    )
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.subprocess.Popen", _fake_popen
+    )
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.time.sleep",
+        lambda _seconds: None,  # type: ignore[assignment]
+    )
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.discover_random_unused_port",
+        _fixed_port,
+    )
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.random_password",
+        _fixed_password,
+    )
+
+    toolset = OpencodeToolset(
+        {
+            "hostname": "127.0.0.1",
+            "override_model_id": "main",
+        }
+    )
+    toolset.bind_context(
+        PluginContext(
+            CapabilityRegistry(),
+            model_gateway=PluginModelGateway(
+                ModelService(
+                    [
+                        ModelSpec(
+                            id="main",
+                            provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                            model="gpt-5.4",
+                            context_window=32000,
+                            api_base="https://ai.example.com/v1",
+                            api_key="secret-key",
+                            extra_config={"timeout": 1234},
+                        )
+                    ],
+                    default_model_id="main",
+                )
+            ),
+        )
+    )
+
+    first = await toolset.execute_task("First task")
+    second = await toolset.execute_task("Second task")
+
+    assert spawned_commands == [
+        ["opencode", "serve", "--hostname", "127.0.0.1", "--port", "45678"]
+    ]
+    assert (
+        spawned_envs[0]["OPENCODE_SERVER_PASSWORD"]
+        == "AbC123XyZ789PasswordSafeToken000"
+    )
+    assert json.loads(spawned_envs[0]["OPENCODE_CONFIG_CONTENT"]) == {
+        "model": "gpt-5.4",
+        "provider": {
+            "openai": {
+                "options": {
+                    "timeout": 1234,
+                    "apiKey": "secret-key",
+                    "baseURL": "https://ai.example.com/v1",
+                }
+            }
+        },
+    }
+    assert created_sessions == 1
+    assert first["server_started"] is True
+    assert first["reused_session"] is False
+    assert second["server_started"] is False
+    assert second["reused_session"] is True
+    assert first["server_url"] == "http://127.0.0.1:45678"
+    assert posted_messages[0]["parts"][0]["text"] == "First task"
+    assert posted_messages[1]["parts"][0]["text"] == "Second task"
 
 
 def test_ssh_session_pool_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:

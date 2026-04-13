@@ -6,6 +6,8 @@ from typing import Any
 from adomcore.domain.capabilities import FunctionSpec
 from adomcore.domain.ids import McpServerId, SkillId
 from adomcore.services.capability_registry import CapabilityRegistry
+from adomcore.services.model_service import ModelService
+from adomcore.services.plugin_model_gateway import PluginModelGateway, PluginModelHandle
 
 
 class PluginContext:
@@ -13,9 +15,22 @@ class PluginContext:
         self,
         registry: CapabilityRegistry,
         self_mutation_service: object | None = None,
+        model_gateway: PluginModelGateway | None = None,
     ) -> None:
         self._registry = registry
         self._self_mutation = self_mutation_service
+        self._model_gateway = model_gateway
+
+    @property
+    def model_service(self) -> ModelService:
+        if self._model_gateway is None:
+            raise RuntimeError("PluginContext is not configured for model access")
+        return self._model_gateway.model_service
+
+    def get_model(self, model_id: str | None = None) -> PluginModelHandle:
+        if self._model_gateway is None:
+            raise RuntimeError("PluginContext is not configured for model access")
+        return self._model_gateway.get_model(model_id)
 
     def register_function(
         self, spec: FunctionSpec, handler: Callable[..., Any]
