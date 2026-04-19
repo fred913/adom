@@ -168,7 +168,7 @@ async def main() -> None:
     with tempfile.TemporaryDirectory(prefix="adomcore-repl-") as tmp:
         data_dir = Path(tmp)
         settings = _load_demo_settings(data_dir)
-        container = await build_container(settings)
+        container = await build_container(settings, takeover_logging=True)
         activate_repo_plugins(container)
         activate_demo_plugin(container)
 

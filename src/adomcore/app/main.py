@@ -12,13 +12,15 @@ from adomcore.app.settings import AppSettings
 _container_key = "container"
 
 
-def create_app(settings: AppSettings | None = None) -> FastAPI:
+def create_app(
+    settings: AppSettings | None = None, *, takeover_logging: bool = False
+) -> FastAPI:
     if settings is None:
         settings = AppSettings.load()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        c = await build_container(settings)
+        c = await build_container(settings, takeover_logging=takeover_logging)
         app.state.container = c
         await startup(c)
         yield

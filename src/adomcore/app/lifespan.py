@@ -9,13 +9,15 @@ from adomcore.app.settings import AppSettings
 from adomcore.plugins.context import PluginContext
 
 
-async def build_container(settings: AppSettings) -> AppContainer:
+async def build_container(
+    settings: AppSettings, *, takeover_logging: bool = False
+) -> AppContainer:
     c = AppContainer()
     c.settings = settings
 
     # paths
     c.paths = PathFactory.from_settings(settings.storage.root_dir)
-    setup_logging(c.paths.logs_dir)
+    setup_logging(c.paths.logs_dir, takeover_logging=takeover_logging)
 
     # storage primitives
     from adomcore.storage.json5_store import Json5Store

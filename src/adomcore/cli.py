@@ -1,8 +1,21 @@
 """CLI entry point."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import typer
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
 app = typer.Typer(name="adomcore", help="adomcore agent runtime")
+
+
+def _cli_create_app() -> FastAPI:  # pyright: ignore[reportUnusedFunction]
+    from adomcore.app.main import create_app
+
+    return create_app(takeover_logging=True)
 
 
 @app.command()
@@ -15,7 +28,7 @@ def serve(
     import uvicorn
 
     uvicorn.run(
-        "adomcore.app.main:create_app",
+        "adomcore.cli:_cli_create_app",
         host=host,
         port=port,
         reload=reload,
