@@ -181,6 +181,79 @@ plugin = ContextPlugin
     assert plugin.name == "Context Plugin"
 
 
+async def test_context_builder_includes_tool_progress_and_assistant_progress(
+    tmp_path: Path,
+) -> None:
+    resolver = PathResolver(tmp_path)
+    json5 = Json5Store()
+    jsonl = JsonlStore()
+    thread_store = ThreadStore(resolver, json5, jsonl)
+    compact_store = CompactStore(resolver, json5)
+    skill_service = SkillService(SkillStore(resolver, json5))
+    capability_registry = CapabilityRegistry()
+    plugin_store = PluginStore(resolver, json5)
+    plugin_manager = PluginManager(plugin_store, PluginLoader(), capability_registry)
+    model_service = ModelService(
+        [
+            ModelSpec(
+                id="main",
+                provider=ModelProviderKind.OPENAI_COMPATIBLE,
+                model="gpt-4o-mini",
+                context_window=32000,
+            )
+        ],
+        default_model_id="main",
+    )
+    builder = ContextBuilder(
+        thread_store,
+        compact_store,
+        skill_service,
+        capability_registry,
+        plugin_manager,
+        model_service,
+    )
+
+    tid = ThreadId("main")
+    thread_store.ensure_thread_dir(tid)
+    await thread_store.append_event(
+        EventEnvelope(
+            event_id="evt_tool_progress",
+            event_type="tool_progress",
+            ts=datetime(2026, 4, 11, 14, 0, 1, tzinfo=UTC),
+            thread_id=tid,
+            payload={
+                "call_id": "call_123",
+                "tool_name": "fetch_data",
+                "message": "Downloaded 3 of 10 chunks",
+            },
+        )
+    )
+    await thread_store.append_event(
+        EventEnvelope(
+            event_id="evt_assistant_progress",
+            event_type="assistant_progress",
+            ts=datetime(2026, 4, 11, 14, 0, 2, tzinfo=UTC),
+            thread_id=tid,
+            payload={
+                "call_id": "call_123",
+                "tool_name": "fetch_data",
+                "text": "The download is underway and partial data has arrived.",
+            },
+        )
+    )
+
+    context = builder.build(thread_id="main", active_model_id="main")
+
+    assert context.messages[0] == {
+        "role": "system",
+        "content": "Interim progress from tool fetch_data (call_123): Downloaded 3 of 10 chunks",
+    }
+    assert context.messages[1] == {
+        "role": "assistant",
+        "content": "The download is underway and partial data has arrived.",
+    }
+
+
 async def test_context_builder_orders_plugin_system_prompts_by_priority(
     tmp_path: Path,
 ) -> None:

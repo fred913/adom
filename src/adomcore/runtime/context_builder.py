@@ -123,6 +123,29 @@ class ContextBuilder:
                         "tool_call_id": payload.get("call_id", ""),
                     }
                 )
+            elif et == "tool_progress":
+                tool_name = payload.get("tool_name", "tool")
+                progress_text = (
+                    payload.get("message")
+                    or payload.get("progress")
+                    or str(payload.get("payload", payload))
+                )
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            f"Interim progress from tool {tool_name} "
+                            f"({payload.get('call_id', '')}): {progress_text}"
+                        ),
+                    }
+                )
+            elif et == "assistant_progress":
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": payload.get("text", ""),
+                    }
+                )
 
         tools = [
             {

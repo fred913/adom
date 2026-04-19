@@ -1,6 +1,7 @@
 """ActionRouter — route AgentDecision actions to executors."""
 
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC
 from typing import Any, cast
 
@@ -13,6 +14,7 @@ from adomcore.domain.actions import (
     CallMcpToolAction,
     RespondAction,
 )
+from adomcore.services.tool_executor import ToolExecutionUpdate
 
 
 @dataclass
@@ -41,6 +43,17 @@ class ActionRouter:
             return ActionExecutionResult(action=action, result=result)
         except Exception as exc:
             return ActionExecutionResult(action=action, result=str(exc), is_error=True)
+
+    async def route_function_stream(
+        self, action: CallFunctionAction
+    ) -> AsyncIterator[ToolExecutionUpdate]:
+        from adomcore.services.tool_executor import ToolExecutor
+
+        assert isinstance(self._tools, ToolExecutor)
+        async for update in self._tools.execute_stream(
+            action.function_name, action.arguments
+        ):
+            yield update
 
     async def _dispatch(self, action: AgentAction) -> Any:
         from adomcore.domain.actions import (

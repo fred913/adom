@@ -36,6 +36,8 @@ class TurnStreamEventType(StrEnum):
     TOOL_CALL_STARTED = "tool_call_started"
     TOOL_CALL_DELTA = "tool_call_delta"
     TOOL_CALL_FINISHED = "tool_call_finished"
+    TOOL_PROGRESS = "tool_progress"
+    TOOL_PROGRESS_SUMMARY = "tool_progress_summary"
     TOOL_RESULT = "tool_result"
     ASSISTANT_TEXT_DONE = "assistant_text_done"
     TURN_DONE = "turn_done"

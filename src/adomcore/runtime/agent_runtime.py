@@ -1,7 +1,8 @@
 """AgentRuntime — the single brain. Owns run_user_turn and run_timer_turn."""
 
+import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,11 +16,12 @@ from adomcore.domain.streaming import (
     TurnStreamEvent,
     TurnStreamEventType,
 )
-from adomcore.runtime.action_router import ActionRouter
+from adomcore.runtime.action_router import ActionExecutionResult, ActionRouter
 from adomcore.runtime.compact_manager import CompactManager
 from adomcore.runtime.context_builder import ContextBuilder
 from adomcore.runtime.response_builder import TurnResult, TurnResultBuilder
 from adomcore.services.agent_service import AgentService
+from adomcore.services.tool_executor import ToolProgressUpdate
 from adomcore.storage.stores.thread_store import ThreadStore
 
 
@@ -58,6 +60,111 @@ class AgentRuntime:
                 "arguments": action.arguments,
             },
         )
+
+    async def _append_tool_progress_event(
+        self,
+        thread_id: ThreadId,
+        action: CallFunctionAction,
+        payload: dict[str, Any],
+    ) -> None:
+        await self._append(
+            thread_id,
+            "tool_progress",
+            {
+                "call_id": action.call_id,
+                "tool_name": action.function_name,
+                **payload,
+            },
+        )
+
+    async def _summarise_tool_progress(
+        self,
+        action: CallFunctionAction,
+        payload: dict[str, Any],
+    ) -> str | None:
+        from adomcore.integrations.llm.engine_protocol import AgentEngine
+
+        assert isinstance(self._engine, AgentEngine)
+        prompt = (
+            "Summarise the latest tool progress for the user in one short sentence. "
+            'Return JSON with shape {"summary": string}.\n'
+            f"Tool name: {action.function_name}\n"
+            f"Call id: {action.call_id}\n"
+            f"Latest progress payload: {json.dumps(payload, ensure_ascii=False, default=str)}"
+        )
+        raw = await self._engine.summarise(prompt)
+        summary = raw.get("summary")
+        if not isinstance(summary, str):
+            return None
+        clean = summary.strip()
+        return clean or None
+
+    async def _execute_function_action(
+        self,
+        thread_id: ThreadId,
+        action: CallFunctionAction,
+        on_event: Callable[[TurnStreamEvent], Awaitable[None]] | None = None,
+    ) -> tuple[Any, bool]:
+        last_summary: str | None = None
+        final_result: Any = None
+        final_is_error = False
+
+        try:
+            async for update in self._router.route_function_stream(action):
+                if isinstance(update, ToolProgressUpdate):
+                    progress_payload = {
+                        "payload": update.payload,
+                        **update.payload,
+                    }
+                    await self._append_tool_progress_event(
+                        thread_id, action, progress_payload
+                    )
+                    if on_event is not None:
+                        await on_event(
+                            TurnStreamEvent(
+                                event=TurnStreamEventType.TOOL_PROGRESS,
+                                data={
+                                    "call_id": action.call_id,
+                                    "tool_name": action.function_name,
+                                    **progress_payload,
+                                    "thread_id": str(thread_id),
+                                },
+                            )
+                        )
+                    summary = await self._summarise_tool_progress(
+                        action, update.payload
+                    )
+                    if summary and summary != last_summary:
+                        last_summary = summary
+                        await self._append(
+                            thread_id,
+                            "assistant_progress",
+                            {
+                                "call_id": action.call_id,
+                                "tool_name": action.function_name,
+                                "text": summary,
+                            },
+                        )
+                        if on_event is not None:
+                            await on_event(
+                                TurnStreamEvent(
+                                    event=TurnStreamEventType.TOOL_PROGRESS_SUMMARY,
+                                    data={
+                                        "call_id": action.call_id,
+                                        "tool_name": action.function_name,
+                                        "text": summary,
+                                        "thread_id": str(thread_id),
+                                    },
+                                )
+                            )
+                    continue
+
+                final_result = update.result
+        except Exception as exc:
+            final_is_error = True
+            final_result = str(exc)
+
+        return final_result, final_is_error
 
     async def run_user_turn(self, thread_id: ThreadId, text: str) -> TurnResult:
         self._threads.ensure_thread_dir(thread_id)
@@ -122,7 +229,14 @@ class AgentRuntime:
             for action in decision.actions:
                 if isinstance(action, CallFunctionAction):
                     await self._append_tool_call_event(thread_id, action)
-                result = await self._router.route(action)
+                    tool_result, is_error = await self._execute_function_action(
+                        thread_id, action
+                    )
+                    result = ActionExecutionResult(
+                        action=action, result=tool_result, is_error=is_error
+                    )
+                else:
+                    result = await self._router.route(action)
                 if isinstance(action, RespondAction):
                     final_text = action.text
                     await self._append(
@@ -238,8 +352,21 @@ class AgentRuntime:
                         },
                     )
                     await self._append_tool_call_event(thread_id, action)
+                    streamed_events: list[TurnStreamEvent] = []
 
-                result = await self._router.route(action)
+                    async def _collect_stream_event(event: TurnStreamEvent) -> None:
+                        streamed_events.append(event)
+
+                    tool_result, is_error = await self._execute_function_action(
+                        thread_id, action, _collect_stream_event
+                    )
+                    for stream_event in streamed_events:
+                        yield stream_event
+                    result = ActionExecutionResult(
+                        action=action, result=tool_result, is_error=is_error
+                    )
+                else:
+                    result = await self._router.route(action)
                 if isinstance(action, RespondAction):
                     final_text = action.text
                     if not streamed_text and action.text:
