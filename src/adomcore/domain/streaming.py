@@ -1,11 +1,12 @@
 """Streaming event models for engine and runtime layers."""
 
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic.dataclasses import dataclass
 
 from adomcore.domain.actions import AgentDecision
+from adomcore.utils import StructuredValue
 
 
 @dataclass(frozen=True)
@@ -46,4 +47,4 @@ class TurnStreamEventType(StrEnum):
 @dataclass(frozen=True)
 class TurnStreamEvent:
     event: TurnStreamEventType
-    data: dict[str, Any]
+    data: dict[str, StructuredValue]

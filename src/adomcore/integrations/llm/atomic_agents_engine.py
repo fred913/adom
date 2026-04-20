@@ -15,6 +15,7 @@ from adomcore.domain.streaming import (
     EngineToolCallDeltaEvent,
 )
 from adomcore.integrations.llm.model_client_factory import make_client
+from adomcore.utils import require_json_object
 
 
 class _OpenAIStreamFunctionDelta(Protocol):
@@ -85,7 +86,7 @@ class AtomicAgentsEngine:
         if tools:
             kwargs["tools"] = tools
 
-        resp = cast(Any, await self._client.messages.create(**kwargs))
+        resp = cast(Any, await self._client.messages.create(**cast(Any, kwargs)))
         actions: list[Any] = []
         for block in cast(list[Any], resp.content):
             if block.type == "text":
@@ -94,7 +95,7 @@ class AtomicAgentsEngine:
                 actions.append(
                     CallFunctionAction(
                         function_name=cast(str, block.name),
-                        arguments=cast(dict[str, object], dict(block.input)),
+                        arguments=require_json_object(dict(block.input)),
                         call_id=cast(str, block.id),
                     )
                 )
@@ -130,7 +131,7 @@ class AtomicAgentsEngine:
             ]
 
         stream = await self._client.chat.completions.create(
-            **kwargs, model=self._spec.model, stream=True
+            **cast(Any, kwargs), model=self._spec.model, stream=True
         )
         text_parts: list[str] = []
         tool_names: dict[int, str] = {}
@@ -175,7 +176,7 @@ class AtomicAgentsEngine:
             for index, tc_id in tool_ids.items():
                 raw_args = "".join(tool_args.get(index, [])) or "{}"
                 try:
-                    parsed_args = cast(dict[str, object], json.loads(raw_args))
+                    parsed_args = require_json_object(json.loads(raw_args))
                 except json.JSONDecodeError:
                     logger.warning(
                         "stream_decide: could not parse streamed tool args: {}",
@@ -216,7 +217,9 @@ class AtomicAgentsEngine:
         if tools:
             kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
 
-        resp = cast(Any, await self._client.chat.completions.create(**kwargs))
+        resp = cast(
+            Any, await self._client.chat.completions.create(**cast(Any, kwargs))
+        )
         msg = resp.choices[0].message
         actions: list[Any] = []
         if msg.tool_calls:
@@ -226,9 +229,8 @@ class AtomicAgentsEngine:
                 actions.append(
                     CallFunctionAction(
                         function_name=cast(str, tc.function.name),
-                        arguments=cast(
-                            dict[str, object],
-                            json.loads(cast(str, tc.function.arguments)),
+                        arguments=require_json_object(
+                            json.loads(cast(str, tc.function.arguments))
                         ),
                         call_id=cast(str, tc.id),
                     )
@@ -248,7 +250,7 @@ class AtomicAgentsEngine:
                     model=self._spec.model,
                     max_tokens=2048,
                     messages=[{"role": "user", "content": prompt}],
-                    **self._spec.extra_config,
+                    **cast(Any, self._spec.extra_config),
                 ),
             )
             text = cast(str, resp.content[0].text) if resp.content else "{}"
@@ -262,7 +264,7 @@ class AtomicAgentsEngine:
                 await self._client.chat.completions.create(
                     model=self._spec.model,
                     messages=[{"role": "user", "content": prompt}],
-                    **self._spec.extra_config,
+                    **cast(Any, self._spec.extra_config),
                 ),
             )
             text = cast(str, resp.choices[0].message.content or "{}")

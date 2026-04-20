@@ -1,10 +1,13 @@
 """Domain models for LLM provider and model specifications."""
 
-from dataclasses import field
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _empty_json_object() -> dict[str, Any]:
+    return {}
 
 
 class ModelProviderKind(StrEnum):
@@ -18,8 +21,9 @@ class TokenEstimateProviderKind(StrEnum):
     HEURISTIC = "heuristic"
 
 
-@dataclass(frozen=True)
-class ModelSpec:
+class ModelSpec(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     id: str
     provider: ModelProviderKind
     model: str
@@ -30,18 +34,12 @@ class ModelSpec:
     enabled: bool = True
     api_base: str | None = None
     api_key: str | None = None
-    extra_config: dict[str, Any] = field(default_factory=lambda: {})
+    extra_config: dict[str, Any] = Field(default_factory=_empty_json_object)
     token_estimate_provider: TokenEstimateProviderKind = (
         TokenEstimateProviderKind.HEURISTIC
     )
-    token_estimate_config: dict[str, Any] = field(default_factory=lambda: {})
+    token_estimate_config: dict[str, Any] = Field(default_factory=_empty_json_object)
 
 
-class ModelSpec_Anthropic(ModelSpec):
-    provider: Literal[ModelProviderKind.ANTHROPIC] = ModelProviderKind.ANTHROPIC
-
-
-class ModelSpec_OpenAICompatible(ModelSpec):
-    provider: Literal[ModelProviderKind.OPENAI_COMPATIBLE] = (
-        ModelProviderKind.OPENAI_COMPATIBLE
-    )
+type ModelSpec_Anthropic = ModelSpec
+type ModelSpec_OpenAICompatible = ModelSpec

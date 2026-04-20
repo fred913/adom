@@ -1,10 +1,9 @@
 """MCP server and tool specifications."""
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict
 
 from adomcore.domain.ids import McpServerId
+from adomcore.utils import StructuredValue
 
 
 class McpServerSpec(BaseModel):
@@ -23,4 +22,4 @@ class McpToolSpec(BaseModel):
     server_id: McpServerId
     name: str
     description: str
-    input_schema: dict[str, Any]
+    input_schema: dict[str, StructuredValue]

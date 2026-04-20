@@ -3,6 +3,7 @@
 from pydantic.dataclasses import dataclass
 
 from adomcore.domain.ids import CronJobId, McpServerId, PluginId, SkillId
+from adomcore.utils import StructuredValue
 
 
 @dataclass(frozen=True)
@@ -13,7 +14,7 @@ class RespondAction:
 @dataclass(frozen=True)
 class CallFunctionAction:
     function_name: str
-    arguments: dict[str, object]
+    arguments: dict[str, StructuredValue]
     call_id: str
 
 
@@ -21,7 +22,7 @@ class CallFunctionAction:
 class CallMcpToolAction:
     server_id: McpServerId
     tool_name: str
-    arguments: dict[str, object]
+    arguments: dict[str, StructuredValue]
     call_id: str
 
 

@@ -1,8 +1,9 @@
 """Chat schemas."""
 
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel
+from adomcore.runtime.response_builder import ToolCallRecord
+from adomcore.utils import StructuredValue
 
 
 class ChatRequest(BaseModel):
@@ -14,9 +15,9 @@ class ChatResponse(BaseModel):
     response_text: str
     thread_id: str
     steps: int
-    tool_calls: list[dict[str, Any]] = []
+    tool_calls: list[ToolCallRecord] = Field(default_factory=lambda: [])
 
 
 class ChatStreamEvent(BaseModel):
     event: str
-    data: dict[str, Any]
+    data: dict[str, StructuredValue]

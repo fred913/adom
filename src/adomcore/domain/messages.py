@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic.dataclasses import dataclass
 
 from adomcore.domain.ids import ThreadId
+from adomcore.utils import StructuredValue
 
 
 @dataclass(frozen=True)
@@ -24,7 +25,7 @@ class AssistantMessage:
 @dataclass(frozen=True)
 class ToolCallMessage:
     function_name: str
-    arguments: dict[str, object]
+    arguments: dict[str, StructuredValue]
     call_id: str
     thread_id: ThreadId
     ts: datetime
@@ -34,7 +35,7 @@ class ToolCallMessage:
 class ToolResultMessage:
     function_name: str
     call_id: str
-    result: object
+    result: StructuredValue
     is_error: bool
     thread_id: ThreadId
     ts: datetime
@@ -44,7 +45,7 @@ class ToolResultMessage:
 class McpCallMessage:
     server_id: str
     tool_name: str
-    arguments: dict[str, object]
+    arguments: dict[str, StructuredValue]
     call_id: str
     thread_id: ThreadId
     ts: datetime
@@ -55,7 +56,7 @@ class McpResultMessage:
     server_id: str
     tool_name: str
     call_id: str
-    result: object
+    result: StructuredValue
     is_error: bool
     thread_id: ThreadId
     ts: datetime
@@ -64,7 +65,7 @@ class McpResultMessage:
 @dataclass(frozen=True)
 class SystemEventMessage:
     event_kind: str
-    detail: dict[str, object]
+    detail: dict[str, StructuredValue]
     thread_id: ThreadId
     ts: datetime
 

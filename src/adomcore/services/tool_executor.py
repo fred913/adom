@@ -10,6 +10,7 @@ from typing import Any, Literal, cast
 from loguru import logger
 
 from adomcore.services.capability_registry import CapabilityRegistry
+from adomcore.utils import StructuredValue, require_json_object, require_json_value
 
 
 class ToolExecutionError(Exception):
@@ -22,13 +23,13 @@ class ToolExecutionError(Exception):
 @dataclass(frozen=True)
 class ToolProgressUpdate:
     kind: Literal["progress"]
-    payload: dict[str, Any]
+    payload: dict[str, StructuredValue]
 
 
 @dataclass(frozen=True)
 class ToolFinalUpdate:
     kind: Literal["final"]
-    result: Any
+    result: StructuredValue
 
 
 type ToolExecutionUpdate = ToolProgressUpdate | ToolFinalUpdate
@@ -98,7 +99,7 @@ class ToolExecutor:
                 function_name,
                 json.dumps(result, default=str),
             )
-            yield ToolFinalUpdate(kind="final", result=result)
+            yield ToolFinalUpdate(kind="final", result=require_json_value(result))
         except Exception as exc:
             raise ToolExecutionError(function_name, str(exc)) from exc
 
@@ -155,12 +156,19 @@ class ToolExecutor:
                 if not isinstance(payload, dict):
                     payload = {key: value for key, value in d.items() if key != "kind"}
                 return ToolProgressUpdate(
-                    kind="progress", payload=cast(dict[str, Any], payload)
+                    kind="progress", payload=require_json_object(cast(object, payload))
                 )
             if kind in {"final", "final_result"}:
-                return ToolFinalUpdate(kind="final", result=d.get("result"))
+                return ToolFinalUpdate(
+                    kind="final",
+                    result=require_json_value(cast(object, d.get("result"))),
+                )
         if isinstance(item, str):
             return ToolProgressUpdate(kind="progress", payload={"message": item})
+        if item is None or isinstance(item, bool | int | float | list | dict):
+            return ToolFinalUpdate(
+                kind="final", result=require_json_value(cast(object, item))
+            )
         raise ToolExecutionError(
             function_name,
             "Unsupported streaming item. Expected progress/final event dict or Tool*Update instance.",

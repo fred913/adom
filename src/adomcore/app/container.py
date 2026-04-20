@@ -14,7 +14,6 @@ from adomcore.domain.actions import AgentDecision, RespondAction
 from adomcore.domain.models import (
     ModelProviderKind,
     ModelSpec,
-    ModelSpec_OpenAICompatible,
 )
 from adomcore.domain.policies import TokenBudgetPolicy
 from adomcore.domain.streaming import EngineDecisionEvent, EngineEvent
@@ -154,11 +153,16 @@ def _default_tool_executor() -> ToolExecutor:
 
 def _default_plugin_loader() -> PluginLoader:
     settings = _default_settings()
-    return PluginLoader(settings.plugins.config)
+    return PluginLoader(
+        {
+            plugin_id: config.model_dump(mode="json")
+            for plugin_id, config in settings.plugins.config.items()
+        }
+    )
 
 
 def _default_model_spec() -> ModelSpec:
-    return ModelSpec_OpenAICompatible(
+    return ModelSpec(
         id="main",
         provider=ModelProviderKind.OPENAI_COMPATIBLE,
         model="default",

@@ -47,11 +47,7 @@ async def build_container(
     c.runtime_store = RuntimeStore(r, json5)
 
     # services
-    from adomcore.domain.models import (
-        ModelProviderKind,
-        ModelSpec,
-        TokenEstimateProviderKind,
-    )
+    from adomcore.domain.models import ModelSpec
     from adomcore.services.agent_service import AgentService
     from adomcore.services.capability_registry import CapabilityRegistry
     from adomcore.services.mcp_service import McpService
@@ -74,24 +70,7 @@ async def build_container(
 
     # model service
     model_specs = [
-        ModelSpec(
-            id=m["id"],
-            provider=ModelProviderKind(m["provider"]),
-            model=m["model"],
-            context_window=m.get("context_window", 32000),
-            supports_tools=m.get("supports_tools", True),
-            supports_structured_output=m.get("supports_structured_output", True),
-            supports_streaming=m.get("supports_streaming", True),
-            enabled=m.get("enabled", True),
-            api_base=m.get("api_base"),
-            api_key=m.get("api_key"),
-            extra_config=m.get("extra_config") or {},
-            token_estimate_provider=TokenEstimateProviderKind(
-                m.get("token_estimate_provider", "heuristic")
-            ),
-            token_estimate_config=m.get("token_estimate_config") or {},
-        )
-        for m in settings.models
+        ModelSpec.model_validate(m.model_dump(mode="json")) for m in settings.models
     ]
     c.model_service = ModelService(model_specs, settings.default_model_id)
     c.plugin_model_gateway = PluginModelGateway(c.model_service)
@@ -119,7 +98,12 @@ async def build_container(
         c.agent_service, c.skill_service, c.mcp_service
     )
     c.scheduler_service = SchedulerService(c.cron_store)
-    c.plugin_loader = PluginLoader(settings.plugins.config)
+    c.plugin_loader = PluginLoader(
+        {
+            plugin_id: config.model_dump(mode="json")
+            for plugin_id, config in settings.plugins.config.items()
+        }
+    )
     plugin_context = PluginContext(
         c.capability_registry,
         c.self_mutation_service,

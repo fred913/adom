@@ -1,10 +1,16 @@
 """Application settings — loaded from config/config.yaml."""
 
 from pathlib import Path
-from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from adomcore.domain.models import ModelSpec
+from adomcore.utils import require_json_object
+
+
+def _empty_model_specs() -> list[ModelSpec]:
+    return []
 
 
 class ApiSettings(BaseModel):
@@ -30,9 +36,16 @@ class SchedulerSettings(BaseModel):
     tick_seconds: int = 1
 
 
+class PluginConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    def __getitem__(self, key: str) -> object:
+        return getattr(self, key)
+
+
 class PluginSettings(BaseModel):
     plugin_dirs: list[str] = Field(default_factory=list)
-    config: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    config: dict[str, PluginConfig] = Field(default_factory=dict)
 
 
 class AppSettings(BaseModel):
@@ -44,12 +57,12 @@ class AppSettings(BaseModel):
     storage: StorageSettings = StorageSettings()
     scheduler: SchedulerSettings = SchedulerSettings()
     plugins: PluginSettings = PluginSettings()
-    models: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])
+    models: list[ModelSpec] = Field(default_factory=_empty_model_specs)
 
     @classmethod
     def load(cls, config_path: Path = Path("config.yaml")) -> AppSettings:
         if not config_path.exists():
             return cls()
         with open(config_path) as f:
-            data: dict[str, Any] = yaml.safe_load(f) or {}
+            data = require_json_object(yaml.safe_load(f) or {})
         return cls.model_validate(data)

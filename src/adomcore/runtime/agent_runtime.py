@@ -4,7 +4,6 @@ import json
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
 
 from adomcore.domain.actions import CallFunctionAction, RespondAction
 from adomcore.domain.events import EventEnvelope
@@ -19,10 +18,15 @@ from adomcore.domain.streaming import (
 from adomcore.runtime.action_router import ActionExecutionResult, ActionRouter
 from adomcore.runtime.compact_manager import CompactManager
 from adomcore.runtime.context_builder import ContextBuilder
-from adomcore.runtime.response_builder import TurnResult, TurnResultBuilder
+from adomcore.runtime.response_builder import (
+    ToolCallRecord,
+    TurnResult,
+    TurnResultBuilder,
+)
 from adomcore.services.agent_service import AgentService
 from adomcore.services.tool_executor import ToolProgressUpdate
 from adomcore.storage.stores.thread_store import ThreadStore
+from adomcore.utils import StructuredValue, require_json_object, require_json_value
 
 
 def _new_event_id() -> str:
@@ -65,7 +69,7 @@ class AgentRuntime:
         self,
         thread_id: ThreadId,
         action: CallFunctionAction,
-        payload: dict[str, Any],
+        payload: dict[str, StructuredValue],
     ) -> None:
         await self._append(
             thread_id,
@@ -80,7 +84,7 @@ class AgentRuntime:
     async def _summarise_tool_progress(
         self,
         action: CallFunctionAction,
-        payload: dict[str, Any],
+        payload: dict[str, StructuredValue],
     ) -> str | None:
         from adomcore.integrations.llm.engine_protocol import AgentEngine
 
@@ -104,9 +108,9 @@ class AgentRuntime:
         thread_id: ThreadId,
         action: CallFunctionAction,
         on_event: Callable[[TurnStreamEvent], Awaitable[None]] | None = None,
-    ) -> tuple[Any, bool]:
+    ) -> tuple[StructuredValue | None, bool]:
         last_summary: str | None = None
-        final_result: Any = None
+        final_result: StructuredValue | None = None
         final_is_error = False
 
         try:
@@ -116,6 +120,7 @@ class AgentRuntime:
                         "payload": update.payload,
                         **update.payload,
                     }
+                    progress_payload = require_json_object(progress_payload)
                     await self._append_tool_progress_event(
                         thread_id, action, progress_payload
                     )
@@ -378,18 +383,21 @@ class AgentRuntime:
                         thread_id, "assistant_message", {"text": action.text}
                     )
                 else:
-                    record = {
-                        "name": str(type(action).__name__),
-                        "call_id": getattr(action, "call_id", ""),
-                        "tool_name": getattr(action, "function_name", None),
-                        "arguments": getattr(action, "arguments", None),
-                        "result": result.result,
-                        "is_error": result.is_error,
-                    }
+                    record = ToolCallRecord(
+                        name=str(type(action).__name__),
+                        call_id=getattr(action, "call_id", ""),
+                        tool_name=getattr(action, "function_name", None),
+                        arguments=require_json_object(getattr(action, "arguments", {}))
+                        if getattr(action, "arguments", None) is not None
+                        else None,
+                        result=require_json_value(result.result),
+                        is_error=result.is_error,
+                    )
                     builder.add_tool_call_record(record)
                     yield TurnStreamEvent(
                         event=TurnStreamEventType.TOOL_RESULT,
-                        data=record | {"thread_id": str(thread_id)},
+                        data=record.model_dump(mode="json")
+                        | {"thread_id": str(thread_id)},
                     )
                     await self._append(
                         thread_id,
@@ -415,13 +423,16 @@ class AgentRuntime:
                     data={
                         "thread_id": str(thread_id),
                         "steps": builder.build().steps,
-                        "tool_calls": builder.build().tool_calls,
+                        "tool_calls": [
+                            tool_call.model_dump(mode="json")
+                            for tool_call in builder.build().tool_calls
+                        ],
                     },
                 )
                 break
 
     async def _append(
-        self, thread_id: ThreadId, event_type: str, payload: dict[str, Any]
+        self, thread_id: ThreadId, event_type: str, payload: dict[str, StructuredValue]
     ) -> None:
         envelope = EventEnvelope(
             event_id=_new_event_id(),

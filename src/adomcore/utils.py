@@ -6,6 +6,12 @@ import random
 import secrets
 import socket
 import string
+from typing import cast
+
+type PrimitiveValue = str | int | float | bool | None
+type StructuredValue = (
+    PrimitiveValue | dict[str, StructuredValue] | list[StructuredValue]
+)
 
 
 def auto_truncate(string: str, max_length: int) -> str:
@@ -57,3 +63,30 @@ def random_password(length: int) -> str:
 
     alphabet = string.ascii_lowercase + string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def require_json_object(value: object) -> dict[str, StructuredValue]:
+    """Validate that a value is a JSON-compatible object."""
+
+    if not isinstance(value, dict):
+        raise ValueError("Expected a JSON object")
+    result: dict[str, StructuredValue] = {}
+    mapping = cast(dict[object, object], value)
+    for key, item in mapping.items():
+        if not isinstance(key, str):
+            raise ValueError("Expected a JSON object")
+        result[key] = require_json_value(item)
+    return result
+
+
+def require_json_value(value: object) -> StructuredValue:
+    """Validate that a value is JSON-compatible."""
+
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list):
+        sequence = cast(list[object], value)
+        return [require_json_value(item) for item in sequence]
+    if isinstance(value, dict):
+        return require_json_object(cast(object, value))
+    raise ValueError("Expected a JSON-compatible value")

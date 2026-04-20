@@ -1,16 +1,24 @@
 """TurnResult and TurnResultBuilder."""
 
-from typing import Any
+from pydantic import BaseModel
 
-from pydantic.dataclasses import dataclass
+from adomcore.utils import StructuredValue
 
 
-@dataclass
-class TurnResult:
+class ToolCallRecord(BaseModel):
+    name: str
+    call_id: str = ""
+    tool_name: str | None = None
+    arguments: dict[str, StructuredValue] | None = None
+    result: StructuredValue | None = None
+    is_error: bool = False
+
+
+class TurnResult(BaseModel):
     response_text: str
     thread_id: str
     steps: int
-    tool_calls: list[dict[str, Any]]
+    tool_calls: list[ToolCallRecord]
 
 
 class TurnResultBuilder:
@@ -18,7 +26,7 @@ class TurnResultBuilder:
         self._response_text = ""
         self._thread_id = ""
         self._steps = 0
-        self._tool_calls: list[dict[str, Any]] = []
+        self._tool_calls: list[ToolCallRecord] = []
 
     def set_response(self, text: str) -> None:
         self._response_text = text
@@ -29,10 +37,10 @@ class TurnResultBuilder:
     def increment_steps(self) -> None:
         self._steps += 1
 
-    def add_tool_call(self, name: str, result: Any) -> None:
-        self._tool_calls.append({"name": name, "result": result})
+    def add_tool_call(self, name: str, result: StructuredValue | None) -> None:
+        self._tool_calls.append(ToolCallRecord(name=name, result=result))
 
-    def add_tool_call_record(self, record: dict[str, Any]) -> None:
+    def add_tool_call_record(self, record: ToolCallRecord) -> None:
         self._tool_calls.append(record)
 
     def build(self) -> TurnResult:

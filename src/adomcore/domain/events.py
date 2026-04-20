@@ -1,18 +1,18 @@
 """Event envelope for JSONL event streams."""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from adomcore.domain.ids import ThreadId
+from adomcore.utils import StructuredValue
 
 
 class DomainEvent(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     event_type: str
-    payload: dict[str, Any]
+    payload: dict[str, StructuredValue]
 
 
 class EventEnvelope(BaseModel):
@@ -22,4 +22,4 @@ class EventEnvelope(BaseModel):
     event_type: str
     ts: datetime
     thread_id: ThreadId
-    payload: dict[str, Any]
+    payload: dict[str, StructuredValue]
