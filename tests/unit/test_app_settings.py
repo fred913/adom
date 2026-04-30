@@ -21,3 +21,7 @@ plugins:
 
     assert settings.plugins.plugin_dirs == ["./local_plugins"]
     assert settings.plugins.config["searchxng"]["base_url"] == "http://localhost:8080"
+    assert settings.plugins.config["searchxng"].get("base_url") == (
+        "http://localhost:8080"
+    )
+    assert settings.plugins.config["searchxng"].get("missing", "fallback") == "fallback"

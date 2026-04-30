@@ -42,6 +42,9 @@ class PluginConfig(BaseModel):
     def __getitem__(self, key: str) -> object:
         return getattr(self, key)
 
+    def get(self, key: str, default: object = None) -> object:
+        return getattr(self, key, default)
+
 
 class PluginSettings(BaseModel):
     plugin_dirs: list[str] = Field(default_factory=list)

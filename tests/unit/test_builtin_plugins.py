@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 from typing import Any
@@ -121,7 +122,7 @@ def test_opencode_tool_builds_override_config_from_adom_model_spec() -> None:
     toolset.bind_context(context)
 
     assert toolset._resolved_override_config() == {  # type: ignore
-        "model": "gpt-5.4",
+        "model": "openai/gpt-5.4",
         "provider": {
             "openai": {
                 "options": {
@@ -201,6 +202,105 @@ def test_ask_user_tool_returns_questionary_answer(
 
 
 @pytest.mark.asyncio
+async def test_opencode_execute_task_accepts_loaded_plugin_config_in_repl_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    from adomcore.app.settings import AppSettings
+    from adomcore.plugins.builtin.opencode.plugin import BuiltinOpencodePlugin
+    from adomcore.services.plugin_manager import PluginManager
+    from adomcore.services.tool_executor import ToolExecutor
+    from adomcore.storage.json5_store import Json5Store
+    from adomcore.storage.path_resolver import PathResolver
+    from adomcore.storage.stores.plugin_store import PluginStore
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+plugins:
+  config:
+    opencode:
+      hostname: 127.0.0.1
+      port: 45678
+      username: chensideyu
+      password: configured-password
+      session_title: Configured session
+""".strip(),
+        encoding="utf-8",
+    )
+    settings = AppSettings.load(config_file)
+    registry = CapabilityRegistry()
+    manager = PluginManager(
+        PluginStore(PathResolver(tmp_path), Json5Store()),
+        PluginLoader(),
+        registry,
+    )
+    opencode_config = settings.plugins.config["opencode"]
+    manager.activate_instance(BuiltinOpencodePlugin(opencode_config))  # type: ignore[arg-type]
+    executor = ToolExecutor(registry)
+
+    expected_auth = "Basic " + base64.b64encode(
+        b"chensideyu:configured-password"
+    ).decode("ascii")
+    requests: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class _Response:
+        def __init__(self, payload: object) -> None:
+            self.status_code = 200
+            self.text = json.dumps(payload)
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def _fake_httpx_request(
+        method: str,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: object,
+    ) -> _Response:
+        assert isinstance(timeout, httpx.Timeout)
+        assert params is None
+        assert headers is not None
+        assert headers["Authorization"] == expected_auth
+        requests.append((method, url, json))
+
+        if url.endswith("/global/health") and method == "GET":
+            return _Response({"healthy": True})
+        if url.endswith("/session") and method == "POST":
+            assert json == {"title": "Configured session"}
+            return _Response({"id": "sess_config"})
+        if url.endswith("/session/sess_config/message") and method == "POST":
+            assert json == {"parts": [{"type": "text", "text": "Write tests"}]}
+            return _Response({"parts": [{"type": "text", "text": "done"}]})
+        raise AssertionError(f"Unexpected request: {method} {url}")
+
+    monkeypatch.setattr(
+        "adomcore.plugins.builtin.opencode.tools.httpx.request", _fake_httpx_request
+    )
+
+    result = await executor.execute("opencode_execute_task", {"prompt": "Write tests"})
+
+    assert result["server_url"] == "http://127.0.0.1:45678"
+    assert result["server_started"] is False
+    assert result["session_id"] == "sess_config"
+    assert result["reused_session"] is False
+    assert requests == [
+        ("GET", "http://127.0.0.1:45678/global/health", None),
+        ("POST", "http://127.0.0.1:45678/session", {"title": "Configured session"}),
+        (
+            "POST",
+            "http://127.0.0.1:45678/session/sess_config/message",
+            {"parts": [{"type": "text", "text": "Write tests"}]},
+        ),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_opencode_tool_starts_server_then_reuses_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -246,10 +346,10 @@ async def test_opencode_tool_starts_server_then_reuses_session(
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
-        timeout: float,
+        timeout: object,
     ) -> _Response:
         nonlocal health_attempts, created_sessions
-        assert timeout == 60
+        assert isinstance(timeout, httpx.Timeout)
         assert params is None
         data = json
         assert headers is not None
@@ -333,7 +433,7 @@ async def test_opencode_tool_starts_server_then_reuses_session(
         == "AbC123XyZ789PasswordSafeToken000"
     )
     assert json.loads(spawned_envs[0]["OPENCODE_CONFIG_CONTENT"]) == {
-        "model": "gpt-5.4",
+        "model": "openai/gpt-5.4",
         "provider": {
             "openai": {
                 "options": {
