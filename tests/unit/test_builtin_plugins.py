@@ -95,6 +95,20 @@ def test_opencode_tool_merges_override_model_into_inline_config() -> None:
     }
 
 
+def test_opencode_tool_accepts_plugin_config_object() -> None:
+    from adomcore.app.settings import PluginConfig
+    from adomcore.plugins.builtin.opencode.tools import OpencodeToolset
+
+    config = PluginConfig.model_validate(
+        {"hostname": "127.0.0.1", "port": 4096, "password": "secret"}
+    )
+
+    toolset = OpencodeToolset(config)  # type: ignore[arg-type]
+
+    assert toolset._base_url == "http://127.0.0.1:4096"  # type: ignore[reportPrivateUsage]
+    assert toolset._resolved_password() == "secret"  # type: ignore[reportPrivateUsage]
+
+
 def test_opencode_tool_builds_override_config_from_adom_model_spec() -> None:
     from adomcore.plugins.builtin.opencode.tools import OpencodeToolset
 

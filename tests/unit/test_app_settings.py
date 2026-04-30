@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from adomcore.app.settings import AppSettings
 
 
@@ -25,3 +27,5 @@ plugins:
         "http://localhost:8080"
     )
     assert settings.plugins.config["searchxng"].get("missing", "fallback") == "fallback"
+    with pytest.raises(KeyError):
+        _ = settings.plugins.config["searchxng"]["missing"]

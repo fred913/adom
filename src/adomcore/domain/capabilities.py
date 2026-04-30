@@ -7,6 +7,11 @@ from pydantic.dataclasses import dataclass
 from adomcore.domain.ids import PluginId
 from adomcore.utils import StructuredValue
 
+# Tool handlers are intentionally typed wider than ``StructuredValue`` because
+# the runtime accepts sync handlers, async handlers, and streaming handlers, then
+# validates/normalizes their yielded or returned values in ``ToolExecutor``.
+type FunctionHandler = Callable[..., object]
+
 
 @dataclass(frozen=True)
 class FunctionSpec:
@@ -22,7 +27,7 @@ class FunctionSpec:
 @dataclass(frozen=True)
 class FunctionBinding:
     spec: FunctionSpec
-    handler: Callable[..., StructuredValue]
+    handler: FunctionHandler
 
 
 @dataclass(frozen=True)

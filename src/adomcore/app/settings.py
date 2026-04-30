@@ -40,10 +40,18 @@ class PluginConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     def __getitem__(self, key: str) -> object:
-        return getattr(self, key)
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        extra = self.model_extra or {}
+        if key in extra:
+            return extra[key]
+        raise KeyError(key)
 
     def get(self, key: str, default: object = None) -> object:
-        return getattr(self, key, default)
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 class PluginSettings(BaseModel):
